@@ -1,0 +1,135 @@
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { RoutineStatus, RoutineStatusIcon } from '@/components/icons/RoutineStatusIcons';
+import { Button } from '@/components/ui/Button';
+import { AiBannerCard } from '@/components/ui/Card';
+import { Colors, Radius, Sizes, Spacing, Typography } from '@/constants/theme';
+
+const DUMMY_BLOCKS: { time: string; task: string; duration: string; status: RoutineStatus }[] = [
+  { time: '07:00', task: '아침 스트레칭', duration: '15분', status: 'done' },
+  { time: '08:00', task: '영어 회화 공부', duration: '30분', status: 'done' },
+  { time: '10:00', task: '포트폴리오 작업', duration: '90분', status: 'active' },
+  { time: '14:00', task: '이력서 첨삭', duration: '40분', status: 'delayed' },
+  { time: '18:00', task: '저녁 운동', duration: '30분', status: 'todo' },
+  { time: '21:00', task: '독서', duration: '20분', status: 'skipped' },
+];
+
+/** 드래그 핸들 (UX-007: 발견성 개선을 위해 점 3x2 그리드로 표시) */
+function DragHandle() {
+  return (
+    <View style={styles.dragHandle}>
+      {Array.from({ length: 6 }, (_, i) => (
+        <View key={i} style={styles.dragDot} />
+      ))}
+    </View>
+  );
+}
+
+export default function ScheduleScreen() {
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <View>
+          <Text style={Typography.sectionTitle}>스케줄 수정</Text>
+          <Text style={Typography.subtext}>2026년 6월 13일 (토)</Text>
+        </View>
+        <Button label="초기화" variant="small-secondary" onPress={() => {}} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <AiBannerCard title="AI 제안" description="포트폴리오 작업을 오전으로 옮기면 집중도가 높아져요." />
+
+        <Text style={[Typography.subtext, styles.dragHint]}>
+          ↕ 길게 눌러 드래그하여 순서를 변경하세요
+        </Text>
+
+        <View style={styles.list}>
+          {DUMMY_BLOCKS.map((block) => {
+            const StatusIcon = RoutineStatusIcon[block.status];
+            return (
+              <View key={block.time} style={styles.row}>
+                <StatusIcon size={24} />
+                <View style={styles.middle}>
+                  <Text style={styles.task}>{block.task}</Text>
+                  <Text style={Typography.subtext}>
+                    {block.time} · {block.duration}
+                  </Text>
+                </View>
+                <DragHandle />
+              </View>
+            );
+          })}
+        </View>
+
+        <Button label="+ 직접 루틴 추가하기" variant="ghost" fullWidth onPress={() => {}} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.screenMargin,
+    paddingTop: Spacing.base,
+    paddingBottom: Spacing.sm,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.screenMargin,
+    paddingBottom: Spacing.section,
+    gap: Spacing.base,
+    alignItems: 'center',
+  },
+  dragHint: {
+    width: '100%',
+    textAlign: 'left',
+  },
+  list: {
+    width: '100%',
+    gap: Spacing.sm,
+  },
+  row: {
+    width: Sizes.routineItem.width,
+    minHeight: Sizes.routineItem.minHeight,
+    borderRadius: Radius.cardSm,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  middle: {
+    flex: 1,
+    gap: 2,
+  },
+  task: {
+    ...Typography.body,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  dragHandle: {
+    width: 18,
+    height: 18,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 2,
+    alignContent: 'center',
+    justifyContent: 'center',
+  },
+  dragDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.tabInactive,
+  },
+});

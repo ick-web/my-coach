@@ -1,15 +1,42 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ActiveIcon } from '@/components/icons/RoutineStatusIcons';
 import { Button } from '@/components/ui/Button';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { useScheduleStore } from '@/stores/scheduleStore';
 
 export default function CheckinModal() {
-  const close = () => router.back();
-  const [duration, setDuration] = useState(85);
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const block = useScheduleStore((s) => s.blocks.find((b) => b.id === id));
+  const { completeCheckin, skipBlock, streakDays } = useScheduleStore();
+
+  const [duration, setDuration] = useState(block?.durationMinutes ?? 30);
   const [note, setNote] = useState('');
+
+  const close = () => router.back();
+
+  const handleComplete = () => {
+    if (id) completeCheckin(id, duration);
+    close();
+  };
+
+  const handleSkip = () => {
+    if (id) skipBlock(id);
+    close();
+  };
+
+  if (!block) {
+    return (
+      <View style={styles.overlay}>
+        <View style={styles.sheet}>
+          <Text style={Typography.subtext}>루틴을 찾을 수 없어요.</Text>
+          <Button label="닫기" fullWidth onPress={close} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.overlay}>
@@ -19,8 +46,8 @@ export default function CheckinModal() {
         <View style={styles.header}>
           <ActiveIcon size={32} />
           <View>
-            <Text style={Typography.sectionTitle}>포트폴리오 작업</Text>
-            <Text style={Typography.subtext}>10:00 · 90분</Text>
+            <Text style={Typography.sectionTitle}>{block.task}</Text>
+            <Text style={Typography.subtext}>{block.time} · {block.duration}</Text>
           </View>
         </View>
 
@@ -54,10 +81,9 @@ export default function CheckinModal() {
         </View>
 
         <View style={styles.actions}>
-          <Button label="완료" fullWidth onPress={close} />
-          <Button label="오늘만 건너뛰기" variant="ghost" fullWidth onPress={close} />
-          {/* UX-008: 건너뜀 시 스트릭 경고 안내 */}
-          <Text style={styles.warning}>건너뛰면 스트릭(12일)이 초기화될 수 있어요</Text>
+          <Button label="완료" fullWidth onPress={handleComplete} />
+          <Button label="오늘만 건너뛰기" variant="ghost" fullWidth onPress={handleSkip} />
+          <Text style={styles.warning}>건너뛰면 스트릭({streakDays}일)이 초기화될 수 있어요</Text>
         </View>
       </View>
     </View>

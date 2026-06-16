@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,11 +6,10 @@ import { StepIndicator } from '@/components/onboarding/StepIndicator';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spacing, Typography } from '@/constants/theme';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 
 export default function OnboardingStep1() {
-  const [goal, setGoal] = useState('');
-  const [rolemodel, setRolemodel] = useState('');
-
+  const { goal, rolemodel, setGoal, setRolemodel } = useOnboardingStore();
   const canProceed = goal.trim().length > 0 && rolemodel.trim().length > 0;
 
   return (

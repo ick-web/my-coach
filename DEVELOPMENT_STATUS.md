@@ -58,6 +58,38 @@ CLAUDE.md 디자인 토큰 전체 반영:
 
 잔여 Major 이슈 없음 (5건 모두 코드 반영 완료, 2026-06-15)
 
+## 상태 관리 (`src/stores/`)
+
+> 추가일: 2026-06-16 | 패키지: `zustand ^5`, `@react-native-async-storage/async-storage 2.2.0`
+
+| 스토어 | 파일 | 영속화 | 내용 |
+|--------|------|--------|------|
+| `useScheduleStore` | `stores/scheduleStore.ts` | ✗ (API 연동 시 교체) | 루틴 블록 목록, loadStatus(`idle/loading/empty/error`), streakDays, completeCheckin/skipBlock/reorderBlocks |
+| `useOnboardingStore` | `stores/onboardingStore.ts` | ✅ AsyncStorage | goal, rolemodel, lifestyleTags — 온보딩 3단계 간 공유 |
+| `useNotificationStore` | `stores/notificationStore.ts` | ✅ AsyncStorage | 토글 7종 + 방해금지 시간 — 앱 재시작 후에도 유지 |
+
+### 타입 (`src/types/index.ts`)
+
+```typescript
+type RoutineBlock = {
+  id: string; time: string; task: string;
+  duration: string;        // 표시용 "15분"
+  durationMinutes: number; // 체크인 스테퍼용
+  status: RoutineStatus;
+};
+```
+
+### 화면 연결 현황
+
+| 화면 | 연결된 스토어 | 변경 내용 |
+|------|--------------|-----------|
+| `home.tsx` | `scheduleStore` | DUMMY_ROUTINES → 스토어 블록, HOME_STATE → loadStatus, 체크인 라우트에 `?id=` 파라미터 추가 |
+| `schedule.tsx` | `scheduleStore` | DUMMY_BLOCKS → 스토어 블록, 날짜 포맷 함수 추가 |
+| `settings.tsx` | `notificationStore` | 모든 `useState` → 스토어 setter (변경 즉시 AsyncStorage 자동 저장) |
+| `step1.tsx` | `onboardingStore` | 로컬 state → 스토어 (뒤로가도 입력값 유지) |
+| `step2.tsx` | `onboardingStore` | 로컬 state → 스토어 |
+| `checkin.tsx` | `scheduleStore` | `useLocalSearchParams({ id })` → 블록 조회, 완료/건너뜀 시 스토어 업데이트 |
+
 ## 검증
 
 - `npx tsc --noEmit` 통과 (타입 에러 없음)
@@ -65,11 +97,10 @@ CLAUDE.md 디자인 토큰 전체 반영:
   - `/login`, `/home`, `/dashboard`, `/schedule`, `/settings`, `/checkin` 6개 라우트 콘솔 에러 없이 정상 렌더링 확인
   - 시각 검증에서 발견된 폴리시 항목 5개(소셜 아이콘, 진척도 카드 네이비 스타일, 대시보드 스트릭 캘린더/목표 달성 예측, 설정 전체 알림/방해금지 시간, 체크인 모달 소요시간/메모) 전부 반영 완료
   - 2026-06-15: 잔여 Major UX 5건(005/006/007/010/012) 코드 반영 후 `/step1`, `/home`, `/schedule`, `/dashboard` Playwright 스크린샷으로 콘솔 에러 없이 정상 렌더링 확인
+- 2026-06-16: 상태 관리 도입 후 `npx tsc --noEmit` 통과
 
-## 다음 단계 (Out of Scope)
-
-현재는 정적 placeholder + 더미 데이터 단계입니다. 다음 단계에서 다룰 항목:
+## 다음 단계
 
 - 인증(소셜 로그인 실제 연동)
-- AI 스케줄 생성 API 연동 (Claude API)
-- 상태 관리 / 데이터 영속화 (PostgreSQL + Redis 백엔드 연동)
+- AI 스케줄 생성 API 연동 (Claude API) — `onboardingStore`의 goal/rolemodel/lifestyleTags를 페이로드로 사용
+- 백엔드 API 연동 — `scheduleStore.setBlocks()`를 API 응답으로 채움

@@ -1,21 +1,12 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { RoutineStatus, RoutineStatusIcon } from '@/components/icons/RoutineStatusIcons';
+import { RoutineStatusIcon } from '@/components/icons/RoutineStatusIcons';
 import { Button } from '@/components/ui/Button';
 import { AiBannerCard } from '@/components/ui/Card';
 import { Colors, Radius, Sizes, Spacing, Typography } from '@/constants/theme';
+import { useScheduleStore } from '@/stores/scheduleStore';
 
-const DUMMY_BLOCKS: { time: string; task: string; duration: string; status: RoutineStatus }[] = [
-  { time: '07:00', task: '아침 스트레칭', duration: '15분', status: 'done' },
-  { time: '08:00', task: '영어 회화 공부', duration: '30분', status: 'done' },
-  { time: '10:00', task: '포트폴리오 작업', duration: '90분', status: 'active' },
-  { time: '14:00', task: '이력서 첨삭', duration: '40분', status: 'delayed' },
-  { time: '18:00', task: '저녁 운동', duration: '30분', status: 'todo' },
-  { time: '21:00', task: '독서', duration: '20분', status: 'skipped' },
-];
-
-/** 드래그 핸들 (UX-007: 발견성 개선을 위해 점 3x2 그리드로 표시) */
 function DragHandle() {
   return (
     <View style={styles.dragHandle}>
@@ -27,14 +18,21 @@ function DragHandle() {
 }
 
 export default function ScheduleScreen() {
+  const { blocks, setBlocks, date } = useScheduleStore();
+
+  const reset = () => {
+    // API 연동 전: 시드 데이터로 복원 (실제 구현 시 API 재요청)
+    useScheduleStore.getState().setLoadStatus('idle');
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <View>
           <Text style={Typography.sectionTitle}>스케줄 수정</Text>
-          <Text style={Typography.subtext}>2026년 6월 13일 (토)</Text>
+          <Text style={Typography.subtext}>{formatDate(date)}</Text>
         </View>
-        <Button label="초기화" variant="small-secondary" onPress={() => {}} />
+        <Button label="초기화" variant="small-secondary" onPress={reset} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -45,10 +43,10 @@ export default function ScheduleScreen() {
         </Text>
 
         <View style={styles.list}>
-          {DUMMY_BLOCKS.map((block) => {
+          {blocks.map((block) => {
             const StatusIcon = RoutineStatusIcon[block.status];
             return (
-              <View key={block.time} style={styles.row}>
+              <View key={block.id} style={styles.row}>
                 <StatusIcon size={24} />
                 <View style={styles.middle}>
                   <Text style={styles.task}>{block.task}</Text>
@@ -66,6 +64,16 @@ export default function ScheduleScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function formatDate(isoDate: string): string {
+  const d = new Date(isoDate);
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+  const weekday = weekdays[d.getDay()];
+  return `${year}년 ${month}월 ${day}일 (${weekday})`;
 }
 
 const styles = StyleSheet.create({

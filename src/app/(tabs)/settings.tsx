@@ -1,10 +1,10 @@
-import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { Toggle } from '@/components/ui/Toggle';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 type ToggleRowProps = {
   label: string;
@@ -26,13 +26,16 @@ function ToggleRow({ label, description, value, onValueChange }: ToggleRowProps)
 }
 
 export default function SettingsScreen() {
-  const [allNotifications, setAllNotifications] = useState(true);
-  const [bannerSound, setBannerSound] = useState(true);
-  const [bannerVibration, setBannerVibration] = useState(true);
-  const [morningRoutine, setMorningRoutine] = useState(true);
-  const [checkinReminder, setCheckinReminder] = useState(true);
-  const [eveningReflection, setEveningReflection] = useState(true);
-  const [streakWarning, setStreakWarning] = useState(false);
+  const {
+    allNotifications, setAllNotifications,
+    morningRoutine, setMorningRoutine,
+    checkinReminder, setCheckinReminder,
+    eveningReflection, setEveningReflection,
+    streakWarning, setStreakWarning,
+    bannerSound, setBannerSound,
+    bannerVibration, setBannerVibration,
+    doNotDisturbStart, doNotDisturbEnd,
+  } = useNotificationStore();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -54,15 +57,14 @@ export default function SettingsScreen() {
           <Text style={styles.cardTitle}>방해 금지 시간</Text>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>취침</Text>
-            <Text style={Typography.subtext}>오후 11:00</Text>
+            <Text style={Typography.subtext}>{formatTime(doNotDisturbStart)}</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>기상</Text>
-            <Text style={Typography.subtext}>오전 6:00</Text>
+            <Text style={Typography.subtext}>{formatTime(doNotDisturbEnd)}</Text>
           </View>
         </View>
 
-        {/* UX-011: Android 배너 알림 종류 카드를 최상단으로 이동 */}
         {Platform.OS === 'android' && (
           <View style={[styles.card, !allNotifications && styles.cardDisabled]}>
             <Text style={styles.cardTitle}>배너 알림 종류</Text>
@@ -90,7 +92,6 @@ export default function SettingsScreen() {
             value={eveningReflection}
             onValueChange={setEveningReflection}
           />
-          {/* UX-008: '건너뜀' 시 스트릭 경고 */}
           <ToggleRow
             label="스트릭 경고"
             description="연속 기록이 끊기기 전에 알려드려요"
@@ -106,6 +107,14 @@ export default function SettingsScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+function formatTime(time: string): string {
+  const [hourStr, minute] = time.split(':');
+  const hour = parseInt(hourStr, 10);
+  const period = hour < 12 ? '오전' : '오후';
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${period} ${displayHour}:${minute}`;
 }
 
 const styles = StyleSheet.create({

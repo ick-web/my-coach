@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,6 +6,7 @@ import { StepIndicator } from '@/components/onboarding/StepIndicator';
 import { Button } from '@/components/ui/Button';
 import { Tag } from '@/components/ui/Tag';
 import { Spacing, Typography } from '@/constants/theme';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 
 const KEYWORDS = [
   '아침형 인간', '운동', '독서', '미니멀라이프', '집중력', '명상',
@@ -14,12 +14,13 @@ const KEYWORDS = [
 ];
 
 export default function OnboardingStep2() {
-  const [selected, setSelected] = useState<string[]>([]);
+  const { lifestyleTags, setLifestyleTags } = useOnboardingStore();
 
   const toggle = (keyword: string) => {
-    setSelected((prev) =>
-      prev.includes(keyword) ? prev.filter((k) => k !== keyword) : [...prev, keyword]
-    );
+    const next = lifestyleTags.includes(keyword)
+      ? lifestyleTags.filter((k) => k !== keyword)
+      : [...lifestyleTags, keyword];
+    setLifestyleTags(next);
   };
 
   return (
@@ -36,7 +37,7 @@ export default function OnboardingStep2() {
             <Tag
               key={keyword}
               label={keyword}
-              selected={selected.includes(keyword)}
+              selected={lifestyleTags.includes(keyword)}
               onPress={() => toggle(keyword)}
             />
           ))}
@@ -46,7 +47,7 @@ export default function OnboardingStep2() {
       <Button
         label="다음"
         fullWidth
-        disabled={selected.length === 0}
+        disabled={lifestyleTags.length === 0}
         onPress={() => router.push('/step3')}
       />
     </SafeAreaView>

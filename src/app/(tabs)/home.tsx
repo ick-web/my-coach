@@ -88,7 +88,7 @@ function EmptyState() {
 }
 
 function ErrorState() {
-  const setLoadStatus = useScheduleStore((s) => s.setLoadStatus);
+  const fetchToday = useScheduleStore((s) => s.fetchToday);
   return (
     <View style={styles.centerState}>
       <WarningIcon />
@@ -96,7 +96,7 @@ function ErrorState() {
       <Text style={[Typography.subtext, styles.centerSubtitle]}>
         네트워크 상태를 확인한 뒤 다시 시도해주세요.
       </Text>
-      <Pressable style={styles.retryRow} onPress={() => setLoadStatus('idle')}>
+      <Pressable style={styles.retryRow} onPress={fetchToday}>
         <RefreshIcon />
         <Text style={styles.retryText}>다시 시도하기</Text>
       </Pressable>

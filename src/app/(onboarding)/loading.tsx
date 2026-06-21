@@ -1,26 +1,30 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing, Typography } from '@/constants/theme';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 
 export default function OnboardingLoading() {
   const [progress, setProgress] = useState(0);
+  const { saveGoalAndGenerateSchedule } = useOnboardingStore();
+  const started = useRef(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        const next = Math.min(100, prev + 5);
-        if (next === 100) {
-          clearInterval(interval);
-          setTimeout(() => router.replace('/complete'), 400);
-        }
-        return next;
-      });
-    }, 120);
+    if (started.current) return;
+    started.current = true;
 
-    return () => clearInterval(interval);
+    saveGoalAndGenerateSchedule((pct) => {
+      setProgress(pct);
+    }).then((result) => {
+      if (result === 'success') {
+        router.replace('/complete');
+      } else {
+        // 에러 시 step3으로 돌아가 재시도 가능하게 함
+        router.replace('/step3');
+      }
+    });
   }, []);
 
   return (

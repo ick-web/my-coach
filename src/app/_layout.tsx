@@ -6,12 +6,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/authStore';
 
 function AuthGuard() {
-  const { isAuthenticated, isLoading, restoreSession } = useAuthStore();
+  const { isAuthenticated, isLoading, initialize } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    restoreSession();
+    initialize();
   }, []);
 
   useEffect(() => {

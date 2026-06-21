@@ -10,10 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppleIcon, GoogleIcon, KakaoIcon } from '@/components/icons/SocialIcons';
 import { Button } from '@/components/ui/Button';
 import { Colors, Spacing, Typography } from '@/constants/theme';
-import { useAuthStore } from '@/stores/authStore';
-import { useOnboardingStore } from '@/stores/onboardingStore';
+import { supabase } from '@/lib/supabase';
 
-// expo-auth-session이 OAuth 리다이렉트 완료 후 브라우저를 닫도록 처리
 WebBrowser.maybeCompleteAuthSession();
 
 const KAKAO_DISCOVERY: AuthSession.DiscoveryDocument = {
@@ -22,7 +20,6 @@ const KAKAO_DISCOVERY: AuthSession.DiscoveryDocument = {
 };
 
 export default function LoginScreen() {
-  const { setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,20 +32,20 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (googleResponse?.type !== 'success') return;
-    const token = googleResponse.authentication?.accessToken;
-    if (!token) return;
-    handleGoogleUser(token);
+    const idToken = googleResponse.authentication?.idToken;
+    if (!idToken) return;
+    handleGoogleIdToken(idToken);
   }, [googleResponse]);
 
-  const handleGoogleUser = async (accessToken: string) => {
+  const handleGoogleIdToken = async (idToken: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('https://www.googleapis.com/userinfo/v2/me', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const { error: authError } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: idToken,
       });
-      const data = await res.json() as { id: string; name: string; email: string };
-      await setUser({ id: data.id, name: data.name, email: data.email, provider: 'google' }, accessToken);
+      if (authError) throw authError;
       navigateAfterAuth();
     } catch {
       setError('Google 로그인 중 오류가 발생했어요.');
@@ -58,6 +55,8 @@ export default function LoginScreen() {
   };
 
   // ─── Kakao OAuth ──────────────────────────────────────────────────
+  // 카카오는 Supabase 기본 제공 provider가 아니므로
+  // Supabase Edge Function 프록시를 통해 커스텀 JWT로 처리합니다.
   const kakaoRedirectUri = AuthSession.makeRedirectUri({ scheme: 'mobile' });
   const [kakaoRequest, kakaoResponse, kakaoPromptAsync] = AuthSession.useAuthRequest(
     {
@@ -81,39 +80,18 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
     try {
-      // 카카오 토큰 교환 — 실제 서비스에서는 백엔드 프록시를 통해 처리해야 합니다
-      // client_secret을 앱 내에 포함하는 것은 보안상 권장되지 않습니다
-      const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          client_id: process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '',
-          redirect_uri: kakaoRedirectUri,
-          code,
-          ...(process.env.EXPO_PUBLIC_KAKAO_CLIENT_SECRET
-            ? { client_secret: process.env.EXPO_PUBLIC_KAKAO_CLIENT_SECRET }
-            : {}),
-        }).toString(),
+      // Edge Function: auth/kakao → Kakao 토큰 교환 후 Supabase 커스텀 JWT 반환
+      const { data, error: fnError } = await supabase.functions.invoke('auth-kakao', {
+        body: { code, redirectUri: kakaoRedirectUri },
       });
-      const tokenData = await tokenRes.json() as { access_token: string };
-      const accessToken = tokenData.access_token;
+      if (fnError) throw fnError;
 
-      const profileRes = await fetch('https://kapi.kakao.com/v2/user/me', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
       });
-      const profileData = await profileRes.json() as {
-        id: number;
-        kakao_account?: { email?: string; profile?: { nickname?: string } };
-      };
+      if (sessionError) throw sessionError;
 
-      const name = profileData.kakao_account?.profile?.nickname ?? '사용자';
-      const email = profileData.kakao_account?.email ?? '';
-
-      await setUser(
-        { id: String(profileData.id), name, email, provider: 'kakao' },
-        accessToken
-      );
       navigateAfterAuth();
     } catch {
       setError('카카오 로그인 중 오류가 발생했어요.');
@@ -133,20 +111,17 @@ export default function LoginScreen() {
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
-      const name =
-        [credential.fullName?.givenName, credential.fullName?.familyName]
-          .filter(Boolean)
-          .join(' ') || '사용자';
-      const email = credential.email ?? '';
+      if (!credential.identityToken) throw new Error('No identity token');
 
-      await setUser(
-        { id: credential.user, name, email, provider: 'apple' },
-        credential.identityToken ?? ''
-      );
+      const { error: authError } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      if (authError) throw authError;
+
       navigateAfterAuth();
     } catch (e: unknown) {
       const code = (e as { code?: string }).code;
-      // ERR_CANCELED: 사용자가 직접 취소한 경우 에러 표시 안 함
       if (code !== 'ERR_CANCELED') {
         setError('Apple 로그인 중 오류가 발생했어요.');
       }
@@ -162,9 +137,14 @@ export default function LoginScreen() {
   };
 
   // ─── 공통 ─────────────────────────────────────────────────────────
-  const navigateAfterAuth = () => {
-    const { goal } = useOnboardingStore.getState();
-    if (goal) {
+  const navigateAfterAuth = async () => {
+    // Goal이 있으면 홈으로, 없으면 온보딩으로
+    const { data: goals } = await supabase
+      .from('goals')
+      .select('id')
+      .eq('is_active', true)
+      .limit(1);
+    if (goals && goals.length > 0) {
       router.replace('/(tabs)/home');
     } else {
       router.replace('/step1');

@@ -1,11 +1,11 @@
 # MyCoach 모바일 앱 개발 현황
 
-> 마지막 업데이트: 2026-06-15
+> 마지막 업데이트: 2026-06-18
 
 ## 프로젝트 구조
 
 - **위치**: `/Users/ickhwanyu/Desktop/NewHuman/mobile`
-- **스택**: Expo (SDK 56) + Expo Router + TypeScript + react-native-svg
+- **스택**: Expo (SDK 56) + Expo Router + TypeScript + react-native-svg + Supabase
 - **라우팅**: `src/app` (route groups: `(auth)`, `(onboarding)`, `(tabs)`, `(modals)`)
 
 ## 디자인 시스템 (`src/constants/theme.ts`)
@@ -33,7 +33,7 @@ CLAUDE.md 디자인 토큰 전체 반영:
 |---|---|---|
 | SCR-00 로그인/회원가입 | `(auth)/login.tsx` | 소셜 로그인 3종(카카오/Google/Apple, 브랜드 아이콘 적용) + 이메일 진입 |
 | SCR-01/08/09 온보딩 1~3단계 | `(onboarding)/step1~3.tsx` | Step indicator 포함 입력 폼 placeholder |
-| SCR-10a/10b 로딩 (생성 중 → 완료) | `(onboarding)/loading.tsx` | 진행률 애니메이션(0→100%) → 자동 전환 |
+| SCR-10a/10b 로딩 (생성 중 → 완료) | `(onboarding)/loading.tsx` | 실제 AI 스케줄 생성 API 호출 + 진행률 표시 |
 | SCR-11 완료 축하 | `(onboarding)/complete.tsx` | 소셜 공유 CTA 포함 (UX-004) |
 | SCR-02 홈 | `(tabs)/home.tsx` | 네이비 배경 진척도 카드, AI 추천 배너, 루틴 리스트(5종 상태), empty/error 상태(SCR-10c/10d) 분기 |
 | SCR-03 스케줄 수정 | `(tabs)/schedule.tsx` | AI 배너 + 드래그 핸들 리스트 + "직접 루틴 추가" CTA |
@@ -50,23 +50,63 @@ CLAUDE.md 디자인 토큰 전체 반영:
 - ✅ UX-008: SCR-04 '오늘만 건너뛰기' + 스트릭 경고 텍스트
 - ✅ UX-009: SCR-05 이모지 감정 평가 + 텍스트 레이블 + 선택 상태 배경
 - ✅ UX-011: SCR-07 Android 배너 알림 카드 최상단 배치
-- ✅ UX-005: SCR-01/08/09 온보딩 — `StepIndicator`에 "Step X / 3" 라벨 + 진행 바 추가 (기존 도트와 함께 표시)
-- ✅ UX-006: SCR-02 진척 카드 — `ProgressCard`를 `completed`/`total` 기반으로 재구성, "2 / 6 완료 · 33%"와 "🔥 스트릭 12일째!" 배지를 분리 표시
-- ✅ UX-007: SCR-03 — "↕ 길게 눌러 드래그하여 순서를 변경하세요" 안내 텍스트 추가 (기존 6-dot 드래그 핸들과 함께)
-- ✅ UX-010: SCR-06 목표 달성 예측 — `InfoIcon` ⓘ 추가 + "최근 7일 완료율 기준 산출" 캡션 표시
+- ✅ UX-005: SCR-01/08/09 온보딩 — `StepIndicator`에 "Step X / 3" 라벨 + 진행 바 추가
+- ✅ UX-006: SCR-02 진척 카드 — `ProgressCard`를 `completed`/`total` 기반으로 재구성, 스트릭 배지 분리
+- ✅ UX-007: SCR-03 — "↕ 길게 눌러 드래그하여 순서를 변경하세요" 안내 텍스트 추가
+- ✅ UX-010: SCR-06 목표 달성 예측 — `InfoIcon` ⓘ 추가 + "최근 7일 완료율 기준 산출" 캡션
 - ✅ UX-012: SCR-10c 빈 상태 — 🗓️ 이모지를 `CalendarIcon` SVG로 교체
 
 잔여 Major 이슈 없음 (5건 모두 코드 반영 완료, 2026-06-15)
 
+---
+
+## 백엔드 연동 (Supabase) — 2026-06-18
+
+### 패키지
+
+```
+@supabase/supabase-js ^2.108.2
+```
+
+### 신규 파일
+
+| 파일 | 내용 |
+|------|------|
+| `src/lib/supabase.ts` | Supabase 클라이언트 (`createClient<Database>`, SecureStore 세션) |
+| `src/lib/database.types.ts` | 6개 테이블 + user_streaks 뷰 TypeScript 타입 (Relationships 포함) |
+| `supabase/migrations/20260618000000_initial_schema.sql` | 초기 DB 스키마 (테이블·RLS·트리거·뷰) |
+| `.env` | Supabase URL/ANON_KEY, Google Web Client ID 입력 완료 |
+
+### Supabase 프로젝트
+
+| 항목 | 값 |
+|------|----|
+| 프로젝트 ID | `nswfgdyjpaorxfqbdnhv` |
+| URL | `https://nswfgdyjpaorxfqbdnhv.supabase.co` |
+| 리전 | ap-northeast-2 (서울) |
+| DB 테이블 | profiles / goals / daily_schedules / routine_blocks / checkins / feedbacks |
+| RLS | 전 테이블 활성화 (본인 데이터만 접근) |
+
+### 인증 설정
+
+| 프로바이더 | 상태 |
+|----------|------|
+| Google | ✅ 완료 (Web Client ID + Skip nonce checks ON) |
+| Apple | ⬜ 미설정 |
+| 카카오 | ⬜ Edge Function 미구현 |
+
+---
+
 ## 상태 관리 (`src/stores/`)
 
-> 추가일: 2026-06-16 | 패키지: `zustand ^5`, `@react-native-async-storage/async-storage 2.2.0`
+> 2026-06-16 도입 → 2026-06-18 Supabase 연동 완료
 
 | 스토어 | 파일 | 영속화 | 내용 |
 |--------|------|--------|------|
-| `useScheduleStore` | `stores/scheduleStore.ts` | ✗ (API 연동 시 교체) | 루틴 블록 목록, loadStatus(`idle/loading/empty/error`), streakDays, completeCheckin/skipBlock/reorderBlocks |
-| `useOnboardingStore` | `stores/onboardingStore.ts` | ✅ AsyncStorage | goal, rolemodel, lifestyleTags — 온보딩 3단계 간 공유 |
-| `useNotificationStore` | `stores/notificationStore.ts` | ✅ AsyncStorage | 토글 7종 + 방해금지 시간 — 앱 재시작 후에도 유지 |
+| `useAuthStore` | `stores/authStore.ts` | Supabase Auth (SecureStore) | 세션 복원(`initialize`), onAuthStateChange 구독, 로그아웃 |
+| `useScheduleStore` | `stores/scheduleStore.ts` | ✗ (Supabase DB) | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` — 낙관적 업데이트 후 DB 동기화 |
+| `useOnboardingStore` | `stores/onboardingStore.ts` | ✗ (Supabase DB) | goal/rolemodel/lifestyleTags + `saveGoalAndGenerateSchedule` (Goal DB 저장 → FastAPI 호출 → DailySchedule 저장) |
+| `useNotificationStore` | `stores/notificationStore.ts` | ✅ AsyncStorage | 토글 7종 + 방해금지 시간 |
 
 ### 타입 (`src/types/index.ts`)
 
@@ -75,32 +115,35 @@ type RoutineBlock = {
   id: string; time: string; task: string;
   duration: string;        // 표시용 "15분"
   durationMinutes: number; // 체크인 스테퍼용
-  status: RoutineStatus;
+  status: RoutineStatus;   // 'todo' | 'active' | 'done' | 'delayed' | 'skipped'
 };
 ```
 
 ### 화면 연결 현황
 
-| 화면 | 연결된 스토어 | 변경 내용 |
-|------|--------------|-----------|
-| `home.tsx` | `scheduleStore` | DUMMY_ROUTINES → 스토어 블록, HOME_STATE → loadStatus, 체크인 라우트에 `?id=` 파라미터 추가 |
-| `schedule.tsx` | `scheduleStore` | DUMMY_BLOCKS → 스토어 블록, 날짜 포맷 함수 추가 |
-| `settings.tsx` | `notificationStore` | 모든 `useState` → 스토어 setter (변경 즉시 AsyncStorage 자동 저장) |
-| `step1.tsx` | `onboardingStore` | 로컬 state → 스토어 (뒤로가도 입력값 유지) |
-| `step2.tsx` | `onboardingStore` | 로컬 state → 스토어 |
-| `checkin.tsx` | `scheduleStore` | `useLocalSearchParams({ id })` → 블록 조회, 완료/건너뜀 시 스토어 업데이트 |
+| 화면 | 연결된 스토어 | 내용 |
+|------|--------------|------|
+| `(auth)/login.tsx` | `supabase` 직접 | `signInWithIdToken`(Google/Apple), 카카오 Edge Function 프록시 |
+| `app/_layout.tsx` | `authStore` | `initialize()` — 세션 복원 + onAuthStateChange 구독 |
+| `(onboarding)/loading.tsx` | `onboardingStore` | `saveGoalAndGenerateSchedule` 실제 API 호출 |
+| `(tabs)/home.tsx` | `scheduleStore` | `fetchToday`, ErrorState 재시도 버튼 |
+| `(tabs)/schedule.tsx` | `scheduleStore` | `fetchToday`, `reorderBlocks` |
+| `(tabs)/settings.tsx` | `notificationStore` | 모든 토글 → 스토어 setter |
+| `(modals)/checkin.tsx` | `scheduleStore` | `completeCheckin` / `skipBlock` |
+
+---
 
 ## 검증
 
-- `npx tsc --noEmit` 통과 (타입 에러 없음)
-- Expo Web 빌드 + Playwright 스크린샷으로 `final/scr-XX.png`와 구조 대조
+- `npx tsc --noEmit` 통과 (타입 에러 없음) — 2026-06-18 기준
+- Expo Web 빌드 + Playwright 스크린샷으로 `final/scr-XX.png`와 구조 대조 완료 (2026-06-15)
   - `/login`, `/home`, `/dashboard`, `/schedule`, `/settings`, `/checkin` 6개 라우트 콘솔 에러 없이 정상 렌더링 확인
-  - 시각 검증에서 발견된 폴리시 항목 5개(소셜 아이콘, 진척도 카드 네이비 스타일, 대시보드 스트릭 캘린더/목표 달성 예측, 설정 전체 알림/방해금지 시간, 체크인 모달 소요시간/메모) 전부 반영 완료
-  - 2026-06-15: 잔여 Major UX 5건(005/006/007/010/012) 코드 반영 후 `/step1`, `/home`, `/schedule`, `/dashboard` Playwright 스크린샷으로 콘솔 에러 없이 정상 렌더링 확인
-- 2026-06-16: 상태 관리 도입 후 `npx tsc --noEmit` 통과
 
 ## 다음 단계
 
-- 인증(소셜 로그인 실제 연동)
-- AI 스케줄 생성 API 연동 (Claude API) — `onboardingStore`의 goal/rolemodel/lifestyleTags를 페이로드로 사용
-- 백엔드 API 연동 — `scheduleStore.setBlocks()`를 API 응답으로 채움
+- [ ] Apple OAuth 설정 (Supabase Dashboard)
+- [ ] `auth-kakao` Edge Function 개발 (카카오 토큰 교환 → Supabase 커스텀 JWT)
+- [ ] FastAPI 서버 개발 — `POST /generate-schedule` (Claude API 호출), `POST /feedback`
+- [ ] iOS/Android 스탠드얼론 빌드용 Google Client ID 추가 (`.env`)
+- [ ] FCM 푸시 알림 연동
+- [ ] SCR-06 대시보드 실제 통계 데이터 연동 (현재 하드코딩)

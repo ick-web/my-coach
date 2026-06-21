@@ -1,62 +1,145 @@
 import { create } from 'zustand';
 
+import { supabase } from '@/lib/supabase';
 import type { RoutineBlock, RoutineStatus } from '@/types';
 
 export type LoadStatus = 'idle' | 'loading' | 'empty' | 'error';
 
 type ScheduleState = {
   date: string;
+  scheduleId: string | null;
   blocks: RoutineBlock[];
   loadStatus: LoadStatus;
   streakDays: number;
-  setBlocks: (blocks: RoutineBlock[], date: string) => void;
-  setLoadStatus: (status: LoadStatus) => void;
-  updateBlockStatus: (id: string, status: RoutineStatus) => void;
-  reorderBlocks: (fromIndex: number, toIndex: number) => void;
-  completeCheckin: (id: string, actualDuration: number) => void;
-  skipBlock: (id: string) => void;
+  // 오늘 스케줄 로드
+  fetchToday: () => Promise<void>;
+  // 체크인 완료
+  completeCheckin: (id: string, actualDuration: number, note?: string) => Promise<void>;
+  // 건너뜀
+  skipBlock: (id: string) => Promise<void>;
+  // 순서 변경 (로컬 즉시 반영 후 DB 배치 업데이트)
+  reorderBlocks: (fromIndex: number, toIndex: number) => Promise<void>;
 };
 
-const SEED_BLOCKS: RoutineBlock[] = [
-  { id: '1', time: '07:00', task: '아침 스트레칭', duration: '15분', durationMinutes: 15, status: 'done' },
-  { id: '2', time: '08:00', task: '영어 회화 공부', duration: '30분', durationMinutes: 30, status: 'done' },
-  { id: '3', time: '10:00', task: '포트폴리오 작업', duration: '90분', durationMinutes: 90, status: 'active' },
-  { id: '4', time: '14:00', task: '이력서 첨삭', duration: '40분', durationMinutes: 40, status: 'delayed' },
-  { id: '5', time: '18:00', task: '저녁 운동', duration: '30분', durationMinutes: 30, status: 'todo' },
-  { id: '6', time: '21:00', task: '독서', duration: '20분', durationMinutes: 20, status: 'skipped' },
-];
-
-export const useScheduleStore = create<ScheduleState>()((set) => ({
+export const useScheduleStore = create<ScheduleState>()((set, get) => ({
   date: new Date().toISOString().slice(0, 10),
-  blocks: SEED_BLOCKS,
+  scheduleId: null,
+  blocks: [],
   loadStatus: 'idle',
-  streakDays: 12,
+  streakDays: 0,
 
-  setBlocks: (blocks, date) =>
-    set({ blocks, date, loadStatus: blocks.length === 0 ? 'empty' : 'idle' }),
+  fetchToday: async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    set({ loadStatus: 'loading', date: today });
 
-  setLoadStatus: (loadStatus) => set({ loadStatus }),
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      set({ loadStatus: 'error' });
+      return;
+    }
 
-  updateBlockStatus: (id, status) =>
-    set((s) => ({ blocks: s.blocks.map((b) => (b.id === id ? { ...b, status } : b)) })),
+    // 오늘 스케줄 조회
+    const { data: schedule, error: schedErr } = await supabase
+      .from('daily_schedules')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('date', today)
+      .maybeSingle();
 
-  reorderBlocks: (fromIndex, toIndex) =>
-    set((s) => {
-      const blocks = [...s.blocks];
-      const [moved] = blocks.splice(fromIndex, 1);
-      blocks.splice(toIndex, 0, moved);
-      return { blocks };
-    }),
+    if (schedErr) {
+      set({ loadStatus: 'error' });
+      return;
+    }
 
-  completeCheckin: (id, actualDuration) =>
+    if (!schedule) {
+      set({ scheduleId: null, blocks: [], loadStatus: 'empty' });
+      return;
+    }
+
+    // 루틴 블록 조회
+    const { data: rows, error: blockErr } = await supabase
+      .from('routine_blocks')
+      .select('*')
+      .eq('schedule_id', schedule.id)
+      .order('sort_order');
+
+    if (blockErr) {
+      set({ loadStatus: 'error' });
+      return;
+    }
+
+    const blocks: RoutineBlock[] = (rows ?? []).map((r) => ({
+      id: r.id,
+      time: r.time,
+      task: r.task,
+      duration: r.duration_label,
+      durationMinutes: r.duration_minutes,
+      status: r.status as RoutineStatus,
+    }));
+
+    // 스트릭 조회
+    const { data: streak } = await supabase
+      .from('user_streaks')
+      .select('total_completed_days')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    set({
+      scheduleId: schedule.id,
+      blocks,
+      loadStatus: blocks.length === 0 ? 'empty' : 'idle',
+      streakDays: streak?.total_completed_days ?? 0,
+    });
+  },
+
+  completeCheckin: async (id, actualDuration, note) => {
+    // 낙관적 업데이트
     set((s) => ({
       blocks: s.blocks.map((b) =>
-        b.id === id ? { ...b, status: 'done', durationMinutes: actualDuration } : b
+        b.id === id ? { ...b, status: 'done' as RoutineStatus, durationMinutes: actualDuration } : b
       ),
-    })),
+    }));
 
-  skipBlock: (id) =>
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await Promise.all([
+      supabase
+        .from('routine_blocks')
+        .update({ status: 'done', duration_minutes: actualDuration })
+        .eq('id', id),
+      supabase
+        .from('checkins')
+        .insert({ block_id: id, user_id: user.id, actual_duration: actualDuration, note }),
+    ]);
+  },
+
+  skipBlock: async (id) => {
+    // 낙관적 업데이트
     set((s) => ({
-      blocks: s.blocks.map((b) => (b.id === id ? { ...b, status: 'skipped' } : b)),
-    })),
+      blocks: s.blocks.map((b) =>
+        b.id === id ? { ...b, status: 'skipped' as RoutineStatus } : b
+      ),
+    }));
+
+    await supabase
+      .from('routine_blocks')
+      .update({ status: 'skipped' })
+      .eq('id', id);
+  },
+
+  reorderBlocks: async (fromIndex, toIndex) => {
+    const blocks = [...get().blocks];
+    const [moved] = blocks.splice(fromIndex, 1);
+    blocks.splice(toIndex, 0, moved);
+
+    // 로컬 즉시 반영
+    set({ blocks });
+
+    // DB 배치 업데이트
+    const updates = blocks.map((b, i) =>
+      supabase.from('routine_blocks').update({ sort_order: i }).eq('id', b.id)
+    );
+    await Promise.all(updates);
+  },
 }));

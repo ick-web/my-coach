@@ -1,52 +1,47 @@
-import * as SecureStore from 'expo-secure-store';
+import type { Session, User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 
-export type AuthProvider = 'kakao' | 'google' | 'apple' | 'email';
-
-export type AuthUser = {
-  id: string;
-  name: string;
-  email: string;
-  provider: AuthProvider;
-};
+import { supabase } from '@/lib/supabase';
 
 type AuthState = {
-  user: AuthUser | null;
-  accessToken: string | null;
+  user: User | null;
+  session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setUser: (user: AuthUser, accessToken: string) => Promise<void>;
-  restoreSession: () => Promise<void>;
+  // 세션 초기화 (앱 시작 시 1회 호출)
+  initialize: () => Promise<void>;
+  // 로그아웃
   logout: () => Promise<void>;
 };
 
-const SESSION_KEY = 'mycoach_session';
-
 export const useAuthStore = create<AuthState>()((set) => ({
   user: null,
-  accessToken: null,
+  session: null,
   isAuthenticated: false,
   isLoading: true,
 
-  setUser: async (user, accessToken) => {
-    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ user, accessToken }));
-    set({ user, accessToken, isAuthenticated: true });
-  },
+  initialize: async () => {
+    // 저장된 세션 복원
+    const { data: { session } } = await supabase.auth.getSession();
+    set({
+      user: session?.user ?? null,
+      session,
+      isAuthenticated: !!session,
+      isLoading: false,
+    });
 
-  restoreSession: async () => {
-    try {
-      const raw = await SecureStore.getItemAsync(SESSION_KEY);
-      if (raw) {
-        const { user, accessToken } = JSON.parse(raw) as { user: AuthUser; accessToken: string };
-        set({ user, accessToken, isAuthenticated: true });
-      }
-    } finally {
-      set({ isLoading: false });
-    }
+    // 이후 세션 변경(토큰 갱신, 로그아웃 등) 실시간 반영
+    supabase.auth.onAuthStateChange((_event, newSession) => {
+      set({
+        user: newSession?.user ?? null,
+        session: newSession,
+        isAuthenticated: !!newSession,
+      });
+    });
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync(SESSION_KEY);
-    set({ user: null, accessToken: null, isAuthenticated: false });
+    await supabase.auth.signOut();
+    // onAuthStateChange가 상태를 null로 정리함
   },
 }));

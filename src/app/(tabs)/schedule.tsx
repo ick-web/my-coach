@@ -18,12 +18,7 @@ function DragHandle() {
 }
 
 export default function ScheduleScreen() {
-  const { blocks, setBlocks, date } = useScheduleStore();
-
-  const reset = () => {
-    // API 연동 전: 시드 데이터로 복원 (실제 구현 시 API 재요청)
-    useScheduleStore.getState().setLoadStatus('idle');
-  };
+  const { blocks, date, fetchToday } = useScheduleStore();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -32,7 +27,7 @@ export default function ScheduleScreen() {
           <Text style={Typography.sectionTitle}>스케줄 수정</Text>
           <Text style={Typography.subtext}>{formatDate(date)}</Text>
         </View>
-        <Button label="초기화" variant="small-secondary" onPress={reset} />
+        <Button label="초기화" variant="small-secondary" onPress={fetchToday} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>

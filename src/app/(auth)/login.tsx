@@ -1,7 +1,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -24,29 +24,34 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   // ─── Google OAuth ─────────────────────────────────────────────────
-  const [googleRequest, googleResponse, googlePromptAsync] = Google.useAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID,
-  });
-
-  useEffect(() => {
-    if (googleResponse?.type !== 'success') return;
-    const idToken = googleResponse.authentication?.idToken;
-    if (!idToken) return;
-    handleGoogleIdToken(idToken);
-  }, [googleResponse]);
-
-  const handleGoogleIdToken = async (idToken: string) => {
+  const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
     try {
-      const { error: authError } = await supabase.auth.signInWithIdToken({
+      if (Platform.OS === 'web') {
+        // 웹: Supabase가 Google 리다이렉트를 처리, detectSessionInUrl이 세션 자동 복원
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin },
+        });
+        if (error) throw error;
+        return; // 브라우저가 Google로 리다이렉트됨
+      }
+
+      // 네이티브: WebBrowser로 직접 OAuth URL 열기
+      const redirectUri = Linking.createURL('/');
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        token: idToken,
+        options: { redirectTo: redirectUri, skipBrowserRedirect: true },
       });
-      if (authError) throw authError;
-      navigateAfterAuth();
+      if (error || !data.url) throw error ?? new Error('OAuth URL 없음');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+      if (result.type === 'success') {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
+        if (exchangeError) throw exchangeError;
+        await navigateAfterAuth();
+      }
     } catch {
       setError('Google 로그인 중 오류가 발생했어요.');
     } finally {
@@ -92,8 +97,9 @@ export default function LoginScreen() {
       });
       if (sessionError) throw sessionError;
 
-      navigateAfterAuth();
-    } catch {
+      await navigateAfterAuth();
+    } catch (e) {
+      console.log('[Kakao] 에러:', e);
       setError('카카오 로그인 중 오류가 발생했어요.');
     } finally {
       setLoading(false);
@@ -119,8 +125,9 @@ export default function LoginScreen() {
       });
       if (authError) throw authError;
 
-      navigateAfterAuth();
+      await navigateAfterAuth();
     } catch (e: unknown) {
+      console.log('[Apple] 에러:', e);
       const code = (e as { code?: string }).code;
       if (code !== 'ERR_CANCELED') {
         setError('Apple 로그인 중 오류가 발생했어요.');
@@ -173,8 +180,8 @@ export default function LoginScreen() {
         {/* Google */}
         <Pressable
           style={[styles.socialButton, { backgroundColor: '#fff' }, styles.socialButtonBorder]}
-          onPress={() => { setError(null); googlePromptAsync(); }}
-          disabled={loading || !googleRequest}>
+          onPress={handleGoogleSignIn}
+          disabled={loading}>
           <View style={styles.socialIcon}><GoogleIcon size={20} /></View>
           <Text style={[styles.socialLabel, { color: Colors.text }]}>Google로 계속하기</Text>
         </Pressable>

@@ -1,6 +1,6 @@
 # MyCoach 모바일 앱 개발 현황
 
-> 마지막 업데이트: 2026-06-18
+> 마지막 업데이트: 2026-06-21
 
 ## 프로젝트 구조
 
@@ -92,8 +92,31 @@ CLAUDE.md 디자인 토큰 전체 반영:
 | 프로바이더 | 상태 |
 |----------|------|
 | Google | ✅ 완료 (Web Client ID + Skip nonce checks ON) |
-| Apple | ⬜ 미설정 |
-| 카카오 | ⬜ Edge Function 미구현 |
+| Apple | ⬜ 미설정 — Apple Developer Program(연 $99) 가입 보류 중 |
+| 카카오 | ✅ 완료 (2026-06-21) — `auth-kakao` Edge Function 배포 + 카카오 Developers 설정 + 웹(localhost:8081) 로그인 테스트 성공 |
+
+---
+
+## 카카오 로그인 (`auth-kakao` Edge Function) — 2026-06-21
+
+카카오는 Supabase 기본 제공 OAuth provider가 아니므로, 커스텀 Edge Function으로 직접 세션을 발급한다.
+
+### 플로우
+1. 클라이언트(`login.tsx`)가 카카오 인가 코드(`code`) + `redirectUri`를 `auth-kakao` Edge Function에 전달
+2. Edge Function이 `code`를 카카오 액세스 토큰으로 교환 (`https://kauth.kakao.com/oauth/token`)
+3. 카카오 사용자 정보 조회 (`https://kapi.kakao.com/v2/user/me`)
+4. 카카오 고유 id 기반 합성 이메일(`kakao_<id>@kakao.mycoach.internal`)로 `admin.generateLink({ type: 'magiclink' })` 호출 — 신규 유저면 생성, 기존 유저면 토큰만 재발급
+5. `anon.auth.verifyOtp({ type: 'email', token_hash })`로 매직링크 토큰을 `access_token`/`refresh_token`으로 교환 후 클라이언트에 반환
+6. 클라이언트는 받은 토큰으로 `supabase.auth.setSession()` 호출
+
+### 트러블슈팅 기록
+- `client_id [undefined]` (KOE101) → Supabase Edge Function Secrets에 `KAKAO_REST_API_KEY`가 등록 안 돼 있었음. Secrets 탭에 정확한 이름으로 등록 필요.
+- `KOE205` (잘못된 요청) → 카카오 콘솔 동의항목에서 `profile_nickname`/`account_email`이 비활성 상태였음. 동의항목 "사용함" 처리로 해결.
+- `Email link is invalid or has expired` → `verifyOtp`의 `type`을 `generateLink`와 동일한 `'magiclink'`로 주면 실패. **`type: 'email'`**로 줘야 정상 검증됨 (기존 유저 재로그인 시 내부 토큰 저장 방식 차이로 추정).
+- Edge Function 시크릿(`KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET`)은 Supabase Dashboard에서만 등록 — 클라이언트 `.env`(`EXPO_PUBLIC_*`)에는 Client Secret을 절대 넣지 않음 (번들에 노출됨).
+
+### 남은 일
+- [ ] 네이티브 빌드(iOS/Android) 테스트 시 카카오 콘솔 Redirect URI에 `mobile://` 등 커스텀 스킴 값 추가 등록 (현재는 웹 `http://localhost:8081`만 등록됨)
 
 ---
 
@@ -141,8 +164,8 @@ type RoutineBlock = {
 
 ## 다음 단계
 
-- [ ] Apple OAuth 설정 (Supabase Dashboard)
-- [ ] `auth-kakao` Edge Function 개발 (카카오 토큰 교환 → Supabase 커스텀 JWT)
+- [ ] Apple OAuth 설정 (Supabase Dashboard) — 보류, Apple Developer Program 가입 필요
+- [ ] 카카오 로그인 — 네이티브 빌드(iOS/Android) 테스트 시 Redirect URI 추가 등록
 - [ ] FastAPI 서버 개발 — `POST /generate-schedule` (Claude API 호출), `POST /feedback`
 - [ ] iOS/Android 스탠드얼론 빌드용 Google Client ID 추가 (`.env`)
 - [ ] FCM 푸시 알림 연동

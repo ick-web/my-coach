@@ -108,7 +108,7 @@ export default function OnboardingStep2() {
       <Button
         label="다음"
         fullWidth
-        disabled={lifestyleTags.length === 0}
+        disabled={lifestyleTags.length === 0 || wakeTime >= sleepTime}
         onPress={() => router.push('/step3')}
       />
     </SafeAreaView>

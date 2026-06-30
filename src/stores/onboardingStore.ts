@@ -91,6 +91,12 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
       if (schedErr || !schedule) throw schedErr;
       onProgress(80);
 
+      // 같은 날 재온보딩 시 기존 블록 삭제 후 재생성
+      await supabase
+        .from('routine_blocks')
+        .delete()
+        .eq('schedule_id', schedule.id);
+
       const blockRows = aiBlocks.map((b, i) => ({
         schedule_id: schedule.id,
         user_id: user.id,
@@ -110,7 +116,8 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
 
       get().reset();
       return 'success';
-    } catch {
+    } catch (e) {
+      console.error('saveGoalAndGenerateSchedule 오류', e);
       return 'error';
     }
   },

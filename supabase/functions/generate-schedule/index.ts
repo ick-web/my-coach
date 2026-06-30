@@ -52,7 +52,8 @@ async function callClaude(client: Anthropic, prompt: string): Promise<RoutineBlo
     messages: [{ role: 'user', content: prompt }],
   });
   const text = message.content[0].type === 'text' ? message.content[0].text : '';
-  const parsed = JSON.parse(text.trim());
+  const clean = text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+  const parsed = JSON.parse(clean);
   return parsed.blocks as RoutineBlock[];
 }
 
@@ -62,11 +63,15 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    if (!ANTHROPIC_API_KEY) {
+      return jsonResponse({ error: '서버 설정 오류', detail: 'ANTHROPIC_API_KEY not configured' }, 500);
+    }
+
     const body: ScheduleRequest = await req.json();
     const { goal, rolemodel, lifestyle_tags, wake_time, sleep_time } = body;
 
     if (!goal || !rolemodel || !lifestyle_tags?.length || !wake_time || !sleep_time) {
-      return jsonResponse({ error: '필수 파라미터가 누락되었습니다.' }, 400);
+      return jsonResponse({ error: '필수 파라미터가 누락되었습니다.', detail: '필수 필드: goal, rolemodel, lifestyle_tags, wake_time, sleep_time' }, 400);
     }
 
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
@@ -75,7 +80,8 @@ Deno.serve(async (req: Request) => {
     let blocks: RoutineBlock[];
     try {
       blocks = await callClaude(client, prompt);
-    } catch {
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
       // JSON 파싱 실패 시 재시도 1회
       blocks = await callClaude(client, prompt);
     }

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 import { supabase } from '@/lib/supabase';
 
@@ -98,7 +99,7 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
         .select('date, routine_blocks(status)')
         .eq('user_id', user.id)
         .gte('date', fourteenDaysAgo)
-        .order('date', { ascending: true })) as { data: ScheduleRow[] | null; error: any };
+        .order('date', { ascending: true })) as { data: ScheduleRow[] | null; error: PostgrestError | null };
 
       if (schedError) throw schedError;
 

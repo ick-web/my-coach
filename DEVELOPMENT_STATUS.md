@@ -1,6 +1,6 @@
 # MyCoach 모바일 앱 개발 현황
 
-> 마지막 업데이트: 2026-06-21
+> 마지막 업데이트: 2026-06-30
 
 ## 프로젝트 구조
 
@@ -162,11 +162,109 @@ type RoutineBlock = {
 - Expo Web 빌드 + Playwright 스크린샷으로 `final/scr-XX.png`와 구조 대조 완료 (2026-06-15)
   - `/login`, `/home`, `/dashboard`, `/schedule`, `/settings`, `/checkin` 6개 라우트 콘솔 에러 없이 정상 렌더링 확인
 
+---
+
+## AI 스케줄 생성 연동 (2026-06-30)
+
+### 구현 방식 변경
+
+기존 계획(FastAPI 서버)을 **Supabase Edge Function**으로 전환. 추가 서버 없이 즉시 모바일 접근 가능.
+
+### 신규 파일
+
+| 파일 | 내용 |
+|------|------|
+| `supabase/functions/generate-schedule/index.ts` | Claude API 호출 Edge Function — `npm:@anthropic-ai/sdk`, CORS, 마크다운 스트리핑, SyntaxError 재시도 1회 |
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/stores/onboardingStore.ts` | `wakeTime`/`sleepTime` 필드 추가 (기본값 `07:00`/`23:00`), `fetch(localhost)` → `supabase.functions.invoke('generate-schedule')` 교체, 재온보딩 시 `routine_blocks` 중복 방지 (delete → insert), `catch` 에러 로깅 추가 |
+| `src/app/(onboarding)/step2.tsx` | 기상/취침 시간 스테퍼 UI 추가 (30분 단위 `◀`/`▶`, 외부 패키지 없음), `wakeTime >= sleepTime` 역전 방지 가드 |
+
+### Supabase Secrets
+
+| 이름 | 등록 여부 |
+|------|----------|
+| `ANTHROPIC_API_KEY` | ✅ 등록 완료 |
+
+### 동작 확인 (2026-06-30)
+
+curl 테스트 성공 — 목표 "IT 스타트업 PM 취직", 롤모델 "박지성", 기상 07:00/취침 23:00 기준 루틴 7개 생성:
+
+```
+07:00 모닝 러닝 (30분)
+07:30 샤워 및 아침 식사 준비 (30분)
+08:00 PM 직무 관련 독서 (45분)
+09:00 PM 취업 준비 포트폴리오/JD 분석 (90분)
+14:00 PM 실무 역량 학습 SQL/데이터 분석 (60분)
+19:00 저녁 스트레칭 (30분)
+21:00 하루 회고 및 내일 할 일 정리 (30분)
+```
+
+### 커밋 히스토리
+
+| 커밋 | 내용 |
+|------|------|
+| `0233c45` | feat: add generate-schedule Supabase Edge Function (Claude API) |
+| `20e86aa` | fix: Edge Function retry scope, 400 detail, key guard, markdown strip |
+| `09e8394` | feat: add wakeTime/sleepTime to onboardingStore, switch to supabase.functions.invoke |
+| `98a645e` | feat: add wake/sleep time stepper to onboarding Step2 |
+| `fdbaf4d` | fix: prevent duplicate routine_blocks, add error logging, guard time reversal |
+
+---
+
+---
+
+## 대시보드 실데이터 연동 (2026-06-30)
+
+### 개요
+
+SCR-06 대시보드 화면의 하드코딩 상수 5종을 Supabase 실데이터로 교체.
+
+### 신규 파일
+
+| 파일 | 내용 |
+|------|------|
+| `src/stores/dashboardStore.ts` | Zustand 스토어 — Supabase 3개 쿼리(daily_schedules+routine_blocks, goals, user_streaks) + 이번 주 완료율·스트릭·D-N 추정·인사이트 텍스트 계산 |
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/app/(tabs)/dashboard.tsx` | 하드코딩 상수 5종 제거, `useDashboardStore` 연결, `useFocusEffect`로 포커스 시 자동 새로고침, 로딩/에러 상태 UI 추가, goal=null 시 목표 카드 숨김 |
+
+### 교체된 하드코딩 데이터
+
+| 이전 | 이후 |
+|------|------|
+| `WEEK_PERCENTS = [80,60,...]` | 이번 주 월~일 Supabase 실제 완료율 |
+| `STREAK_DAYS = [true,true,...]` | 최근 14일 rolling 완료 여부 |
+| KPI `"68%"`, `"12일"`, `"65%"` | avgCompletionRate / user_streaks / goalCompletionRate |
+| 날짜 `"6월 9일 - 6월 15일"` | 오늘 기준 이번 주 월~일 자동 계산 |
+| 하드코딩 롤모델 인사이트 | `goals.rolemodel` + 최고 완료 요일 기반 동적 텍스트 |
+
+### 커밋 히스토리
+
+| 커밋 | 내용 |
+|------|------|
+| `5b2917d` | feat: add dashboardStore with Supabase queries and computation |
+| `273d65d` | fix: replace error: any with PostgrestError in dashboardStore |
+| `bdce99d` | feat: connect dashboard screen to real Supabase data |
+
+### Deferred 항목 (다음 수정 시 반영)
+
+- `toDateStr()` UTC/KST 시차 오프셋 — `toISOString()` 대신 로컬 날짜 포매터 사용 (00:00~09:00 KST 구간 날짜 불일치)
+- `kpi.goalCompletionRate` — 별도 지표 생기면 `avgCompletionRate`와 분리
+- `auth.getUser()` try-catch 내부로 이동 (방어적 처리)
+
+---
+
 ## 다음 단계
 
 - [ ] Apple OAuth 설정 (Supabase Dashboard) — 보류, Apple Developer Program 가입 필요
 - [ ] 카카오 로그인 — 네이티브 빌드(iOS/Android) 테스트 시 Redirect URI 추가 등록
-- [ ] FastAPI 서버 개발 — `POST /generate-schedule` (Claude API 호출), `POST /feedback`
+- [ ] **`POST /feedback`** — 저녁 회고 AI 피드백 (Supabase Edge Function으로 구현 예정)
 - [ ] iOS/Android 스탠드얼론 빌드용 Google Client ID 추가 (`.env`)
 - [ ] FCM 푸시 알림 연동
-- [ ] SCR-06 대시보드 실제 통계 데이터 연동 (현재 하드코딩)

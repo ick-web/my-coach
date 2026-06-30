@@ -251,7 +251,8 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 |--------|--------|----------|
 | `authStore` | Supabase Auth (SecureStore) | `initialize()` — 앱 시작 시 세션 복원, `onAuthStateChange` 구독 |
 | `scheduleStore` | Supabase DB | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` — 낙관적 업데이트 |
-| `onboardingStore` | Supabase DB | goal 저장 + `POST /generate-schedule` 호출 → `routine_blocks` 저장 |
+| `onboardingStore` | Supabase DB | goal 저장 + `supabase.functions.invoke('generate-schedule')` → `routine_blocks` 저장 |
+| `dashboardStore` | Supabase DB | `fetchDashboard` — 이번 주 완료율·스트릭·D-N 추정·인사이트 텍스트 |
 | `notificationStore` | AsyncStorage | 알림 토글 7종 + 방해금지 시간 |
 
 ### 화면-스토어 연결
@@ -264,6 +265,7 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 | `(tabs)/home.tsx` | `scheduleStore.fetchToday` |
 | `(tabs)/schedule.tsx` | `scheduleStore.fetchToday`, `reorderBlocks` |
 | `(tabs)/settings.tsx` | `notificationStore` 전체 |
+| `(tabs)/dashboard.tsx` | `dashboardStore.fetchDashboard` (useFocusEffect) |
 | `(modals)/checkin.tsx` | `scheduleStore.completeCheckin`, `skipBlock` |
 
 ---
@@ -281,11 +283,11 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 
 - [ ] Apple OAuth (Apple Developer Program 필요)
 - [ ] 카카오 로그인 네이티브 빌드 Redirect URI 등록
-- [ ] FastAPI 서버 — `POST /generate-schedule`, `POST /feedback`
+- [ ] `POST /feedback` — 저녁 회고 AI 피드백 (Supabase Edge Function으로 구현 예정)
 - [ ] FCM 푸시 알림 연동
-- [ ] SCR-06 대시보드 실제 통계 연동 (현재 하드코딩)
+- [x] SCR-06 대시보드 실제 통계 연동 (2026-06-30 완료)
 - [ ] Google 로그인 네이티브 빌드 Redirect URI 등록
 
 ---
 
-*마지막 업데이트: 2026-06-26 | Expo SDK 56 | 프로젝트 루트: `/Users/ickhwanyu/Desktop/design-portfolio/NewHuman/mobile`*
+*마지막 업데이트: 2026-06-30 | Expo SDK 56 | 프로젝트 루트: `/Users/ickhwanyu/Desktop/design-portfolio/NewHuman/mobile`*

@@ -7,16 +7,18 @@ import { Button } from '@/components/ui/Button';
 import { AiBannerCard, ProgressCard } from '@/components/ui/Card';
 import { RoutineItem } from '@/components/ui/RoutineItem';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { useAuthStore } from '@/stores/authStore';
 import { useScheduleStore } from '@/stores/scheduleStore';
 
 export default function HomeScreen() {
   const { blocks, loadStatus, streakDays } = useScheduleStore();
+  const userName = useAuthStore((s) => s.userName);
   const completed = blocks.filter((b) => b.status === 'done').length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>안녕하세요, 이준혁님</Text>
+        <Text style={styles.headerTitle}>안녕하세요, {userName}님</Text>
         <View style={styles.headerIcons}>
           <View style={styles.iconCircle}>
             <BellIcon />

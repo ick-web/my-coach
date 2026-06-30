@@ -6,11 +6,14 @@ type OnboardingState = {
   goal: string;
   rolemodel: string;
   lifestyleTags: string[];
+  wakeTime: string;
+  sleepTime: string;
   setGoal: (goal: string) => void;
   setRolemodel: (rolemodel: string) => void;
   setLifestyleTags: (tags: string[]) => void;
+  setWakeTime: (time: string) => void;
+  setSleepTime: (time: string) => void;
   reset: () => void;
-  // Goal을 DB에 저장하고 AI 스케줄 생성 요청 (onboarding/loading 화면에서 호출)
   saveGoalAndGenerateSchedule: (
     onProgress: (pct: number) => void
   ) => Promise<'success' | 'error'>;
@@ -20,14 +23,18 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   goal: '',
   rolemodel: '',
   lifestyleTags: [],
+  wakeTime: '07:00',
+  sleepTime: '23:00',
 
   setGoal: (goal) => set({ goal }),
   setRolemodel: (rolemodel) => set({ rolemodel }),
   setLifestyleTags: (lifestyleTags) => set({ lifestyleTags }),
-  reset: () => set({ goal: '', rolemodel: '', lifestyleTags: [] }),
+  setWakeTime: (wakeTime) => set({ wakeTime }),
+  setSleepTime: (sleepTime) => set({ sleepTime }),
+  reset: () => set({ goal: '', rolemodel: '', lifestyleTags: [], wakeTime: '07:00', sleepTime: '23:00' }),
 
   saveGoalAndGenerateSchedule: async (onProgress) => {
-    const { goal, rolemodel, lifestyleTags } = get();
+    const { goal, rolemodel, lifestyleTags, wakeTime, sleepTime } = get();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return 'error';
 
@@ -50,21 +57,26 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
       if (goalErr || !savedGoal) throw goalErr;
       onProgress(30);
 
-      // 2. FastAPI AI 서빙 서버에 스케줄 생성 요청
-      const aiRes = await fetch(`${process.env.EXPO_PUBLIC_AI_API_URL}/generate-schedule`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal, rolemodel, lifestyle_tags: lifestyleTags }),
-      });
-      if (!aiRes.ok) throw new Error('AI API error');
-      const { blocks: aiBlocks } = await aiRes.json() as {
+      // 2. Edge Function으로 스케줄 생성 요청
+      const { data: aiData, error: aiError } = await supabase.functions.invoke<{
         blocks: Array<{
           time: string;
           task: string;
           duration_label: string;
           duration_minutes: number;
         }>;
-      };
+      }>('generate-schedule', {
+        body: {
+          goal,
+          rolemodel,
+          lifestyle_tags: lifestyleTags,
+          wake_time: wakeTime,
+          sleep_time: sleepTime,
+        },
+      });
+
+      if (aiError || !aiData) throw aiError ?? new Error('AI API error');
+      const aiBlocks = aiData.blocks;
       onProgress(65);
 
       // 3. DailySchedule + RoutineBlock 저장

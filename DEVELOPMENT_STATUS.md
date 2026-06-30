@@ -261,6 +261,37 @@ SCR-06 대시보드 화면의 하드코딩 상수 5종을 Supabase 실데이터�
 
 ---
 
+---
+
+## 홈 화면 유저 이름 연동 (2026-06-30)
+
+하드코딩된 `"안녕하세요, 이준혁님"` → `profiles.name` 실데이터로 교체.
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/stores/authStore.ts` | `userName: string` 필드 추가, `initialize()` + `onAuthStateChange` 에서 `profiles.name` 조회 (`fetchUserName`) |
+| `src/app/(tabs)/home.tsx` | `useAuthStore`에서 `userName` 구독, 헤더 텍스트 동적 치환 |
+
+### 이름 출처
+
+| 로그인 방식 | 표시 이름 |
+|-----------|---------|
+| Google | Google 계정 이름 (`full_name`) |
+| 카카오 | 카카오 프로필 닉네임 (미동의 시 "카카오 사용자") |
+| 이메일 | 이메일 앞부분 (예: `yih000098`) |
+
+`on_auth_user_created` 트리거가 `raw_user_meta_data->>'full_name'` → `'name'` → 이메일 prefix 순으로 `profiles.name`을 자동 채움.
+
+### 커밋
+
+| 커밋 | 내용 |
+|------|------|
+| `a580076` | feat: show real user name in home screen from profiles table |
+
+---
+
 ## 다음 단계
 
 - [ ] Apple OAuth 설정 (Supabase Dashboard) — 보류, Apple Developer Program 가입 필요

@@ -249,7 +249,7 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 
 | 스토어 | 영속화 | 주요 역할 |
 |--------|--------|----------|
-| `authStore` | Supabase Auth (SecureStore) | `initialize()` — 앱 시작 시 세션 복원, `onAuthStateChange` 구독 |
+| `authStore` | Supabase Auth (SecureStore) | `initialize()` — 세션 복원, `onAuthStateChange` 구독, `userName` (`profiles.name`) 조회 |
 | `scheduleStore` | Supabase DB | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` — 낙관적 업데이트 |
 | `onboardingStore` | Supabase DB | goal 저장 + `supabase.functions.invoke('generate-schedule')` → `routine_blocks` 저장 |
 | `dashboardStore` | Supabase DB | `fetchDashboard` — 이번 주 완료율·스트릭·D-N 추정·인사이트 텍스트 |
@@ -262,7 +262,7 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 | `_layout.tsx` | `authStore.initialize()` |
 | `(auth)/login.tsx` | `supabase` 직접 (signInWithOAuth / setSession) |
 | `(onboarding)/loading.tsx` | `onboardingStore.saveGoalAndGenerateSchedule` |
-| `(tabs)/home.tsx` | `scheduleStore.fetchToday` |
+| `(tabs)/home.tsx` | `scheduleStore.fetchToday`, `authStore.userName` |
 | `(tabs)/schedule.tsx` | `scheduleStore.fetchToday`, `reorderBlocks` |
 | `(tabs)/settings.tsx` | `notificationStore` 전체 |
 | `(tabs)/dashboard.tsx` | `dashboardStore.fetchDashboard` (useFocusEffect) |

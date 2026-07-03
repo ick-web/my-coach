@@ -29,23 +29,23 @@ export default function CheckinModal() {
 
   if (!block) {
     return (
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+      <Pressable style={styles.overlay} onPress={close}>
+        <Pressable style={styles.sheet} onPress={() => {}}>
           <Text style={Typography.subtext}>루틴을 찾을 수 없어요.</Text>
           <Button label="닫기" fullWidth onPress={close} />
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     );
   }
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.sheet}>
+    <Pressable style={styles.overlay} onPress={close}>
+      <Pressable style={styles.sheet} onPress={() => {}}>
         <View style={styles.handle} />
 
         <View style={styles.header}>
           <ActiveIcon size={32} />
-          <View>
+          <View style={styles.titleGroup}>
             <Text style={Typography.sectionTitle}>{block.task}</Text>
             <Text style={Typography.subtext}>{block.time} · {block.duration}</Text>
           </View>
@@ -85,8 +85,8 @@ export default function CheckinModal() {
           <Button label="오늘만 건너뛰기" variant="ghost" fullWidth onPress={handleSkip} />
           <Text style={styles.warning}>건너뛰면 스트릭({streakDays}일)이 초기화될 수 있어요</Text>
         </View>
-      </View>
-    </View>
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -116,6 +116,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+  },
+  titleGroup: {
+    flex: 1,
   },
   question: {
     color: Colors.text,

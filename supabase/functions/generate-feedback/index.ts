@@ -68,6 +68,7 @@ function buildPrompt(req: FeedbackRequest): string {
 - next_blocks의 시간은 HH:MM 24시간 형식, 기상 시간 이후 취침 시간 이전으로 배치
 - next_blocks 각 루틴은 15~90분 단위, 목표 달성에 직결되는 루틴 우선
 - 과도한 일정 금지 (Calm Technology 원칙)
+- score/평점 필드는 포함하지 마세요 (완료율은 별도로 계산됩니다)
 
 JSON 형식만 반환 (다른 텍스트 없이):
 {"ai_summary": "...", "next_blocks": [
@@ -131,7 +132,7 @@ Deno.serve(async (req: Request) => {
       result = await callClaude(client, prompt);
     }
 
-    return jsonResponse(result);
+    return jsonResponse({ ai_summary: result.ai_summary, next_blocks: result.next_blocks });
   } catch (e) {
     console.error('generate-feedback 오류', e);
     return jsonResponse({ error: '피드백 생성 실패', detail: String(e) }, 500);

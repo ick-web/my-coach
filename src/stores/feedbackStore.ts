@@ -72,7 +72,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
   selectedMood: null,
 
   loadToday: async () => {
-    set({ status: 'loading-today' });
+    set({ status: 'loading-today', selectedMood: null, aiSummary: '', nextPreview: [] });
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -219,9 +219,10 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
         sort_order: i,
       }));
 
-      await supabase.from('routine_blocks').insert(blockRows);
+      const { error: blocksInsertError } = await supabase.from('routine_blocks').insert(blockRows);
+      if (blocksInsertError) throw blocksInsertError;
 
-      await supabase.from('feedbacks').insert({
+      const { error: feedbackInsertError } = await supabase.from('feedbacks').insert({
         user_id: user.id,
         date: today,
         ai_summary: aiData.ai_summary,
@@ -229,6 +230,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
         mood,
         next_schedule_preview: aiData.next_blocks,
       });
+      if (feedbackInsertError) throw feedbackInsertError;
 
       set({
         status: 'done',

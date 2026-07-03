@@ -50,7 +50,14 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
 
       const { data: savedGoal, error: goalErr } = await supabase
         .from('goals')
-        .insert({ user_id: user.id, title: goal, rolemodel, lifestyle_tags: lifestyleTags })
+        .insert({
+          user_id: user.id,
+          title: goal,
+          rolemodel,
+          lifestyle_tags: lifestyleTags,
+          wake_time: wakeTime,
+          sleep_time: sleepTime,
+        })
         .select('id')
         .single();
 

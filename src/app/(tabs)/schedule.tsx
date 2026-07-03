@@ -1,3 +1,5 @@
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,6 +21,12 @@ function DragHandle() {
 
 export default function ScheduleScreen() {
   const { blocks, date, fetchToday } = useScheduleStore();
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchToday();
+    }, [fetchToday])
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

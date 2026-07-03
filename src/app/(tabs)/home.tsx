@@ -1,4 +1,5 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,9 +17,15 @@ function isReflectionDay(): boolean {
 }
 
 export default function HomeScreen() {
-  const { blocks, loadStatus, streakDays } = useScheduleStore();
+  const { blocks, loadStatus, streakDays, fetchToday } = useScheduleStore();
   const userName = useAuthStore((s) => s.userName);
   const completed = blocks.filter((b) => b.status === 'done').length;
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchToday();
+    }, [fetchToday])
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

@@ -130,7 +130,7 @@ export default function ReflectionModal() {
             {MOODS.map((m) => (
               <Pressable
                 key={m.key}
-                disabled={isReadOnly || status === 'generating'}
+                disabled={isReadOnly || status === "generating" || hasResult}
                 onPress={() => submitMood(m.key)}
                 style={[styles.moodItem, displayMood === m.key && styles.moodItemSelected]}>
                 <Text style={styles.moodEmoji}>{m.emoji}</Text>

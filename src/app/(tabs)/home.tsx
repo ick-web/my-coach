@@ -10,6 +10,11 @@ import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { useScheduleStore } from '@/stores/scheduleStore';
 
+function isReflectionDay(): boolean {
+  const day = new Date().getDay(); // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
+  return day === 1 || day === 3 || day === 5;
+}
+
 export default function HomeScreen() {
   const { blocks, loadStatus, streakDays } = useScheduleStore();
   const userName = useAuthStore((s) => s.userName);
@@ -61,7 +66,14 @@ export default function HomeScreen() {
           </View>
 
           <Pressable style={styles.reflectionRow} onPress={() => router.push('/reflection')}>
-            <Text style={styles.reflectionLabel}>오늘 하루 회고 작성하기</Text>
+            <View style={styles.reflectionTitleRow}>
+              <Text style={styles.reflectionLabel}>오늘 하루 회고 작성하기</Text>
+              {isReflectionDay() && (
+                <View style={styles.reflectionBadge}>
+                  <Text style={styles.reflectionBadgeText}>오늘의 회고 ✨</Text>
+                </View>
+              )}
+            </View>
             <Text style={Typography.subtext}>이번 주 3회 중 1회 작성됨</Text>
           </Pressable>
         </ScrollView>
@@ -165,6 +177,22 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: '600',
     color: Colors.navy,
+  },
+  reflectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reflectionBadge: {
+    backgroundColor: Colors.statusBg.active,
+    borderRadius: 10,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+  },
+  reflectionBadgeText: {
+    ...Typography.subtext,
+    color: Colors.primary,
+    fontWeight: '700',
   },
   centerState: {
     flex: 1,

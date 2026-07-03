@@ -40,6 +40,8 @@ export interface Database {
           rolemodel: string;
           lifestyle_tags: string[];
           is_active: boolean;
+          wake_time: string;
+          sleep_time: string;
           created_at: string;
           updated_at: string;
         };
@@ -50,6 +52,8 @@ export interface Database {
           rolemodel: string;
           lifestyle_tags?: string[];
           is_active?: boolean;
+          wake_time?: string;
+          sleep_time?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -60,6 +64,8 @@ export interface Database {
           rolemodel?: string;
           lifestyle_tags?: string[];
           is_active?: boolean;
+          wake_time?: string;
+          sleep_time?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -156,6 +162,7 @@ export interface Database {
           date: string;
           ai_summary: string | null;
           score: number | null;
+          mood: string | null;
           next_schedule_preview: Json | null;
           created_at: string;
         };
@@ -165,12 +172,14 @@ export interface Database {
           date: string;
           ai_summary?: string | null;
           score?: number | null;
+          mood?: string | null;
           next_schedule_preview?: Json | null;
           created_at?: string;
         };
         Update: {
           ai_summary?: string | null;
           score?: number | null;
+          mood?: string | null;
           next_schedule_preview?: Json | null;
         };
         Relationships: [];

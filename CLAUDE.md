@@ -174,15 +174,19 @@ Figma 파일: `https://www.figma.com/design/gCMlFaYYSMBNf80fSRpg2R/NewHuman` (Hi
 
 ```
 profiles        id(uuid), email, name, subscription_tier, created_at
-goals           id, user_id, title, rolemodel, lifestyle_tags[], is_active
+goals           id, user_id, title, rolemodel, lifestyle_tags[], is_active,
+                wake_time, sleep_time
 daily_schedules id, user_id, date  (unique: user_id + date)
 routine_blocks  id, schedule_id, user_id, time, task, duration_label,
                 duration_minutes, status, sort_order
 checkins        id, block_id, user_id, actual_duration, note, completed_at
-feedbacks       id, user_id, date, ai_summary, score, next_schedule_preview(jsonb)
+feedbacks       id, user_id, date, ai_summary, score, mood, next_schedule_preview(jsonb)
 
 뷰: user_streaks — 유저별 루틴 완료일 수 집계
 ```
+
+> 참고(2026-07-03): `goals.wake_time`/`sleep_time`(text, default `07:00`/`23:00`), `feedbacks.mood`(text,
+> check `bad|meh|okay|good|great`) 컬럼 추가 — 마이그레이션 `20260703000000_feedback_mood_wake_sleep.sql`.
 
 모든 테이블에 RLS 활성화 — 본인 데이터만 접근 가능.
 
@@ -241,6 +245,21 @@ EXPO_PUBLIC_KAKAO_REST_API_KEY=<카카오 Developers에서 확인>
 `expo run:ios`는 코드 사이닝 인증서 없이 실행 불가.
 Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (README 참고).
 
+### 7. `handle_new_user` 트리거는 기존 계정에 소급 적용 안 됨
+
+`on_auth_user_created`는 `AFTER INSERT ON auth.users`로만 동작하므로, 트리거가 생기기 이전부터
+있던 `auth.users` 계정에는 `profiles` 행이 자동 생성되지 않는다. 이 경우 온보딩에서
+`goals` insert 시 `goals_user_id_fkey` FK 위반(`23503`)이 발생한다(2026-07-03 실사용 중 발견).
+신규 가입 계정은 트리거가 정상 동작하므로 문제없음 — 문제가 재발하면 `auth.users`와 `profiles`를
+`left join`해 `profiles.id is null`인 계정을 찾아 동일 COALESCE 로직으로 백필하면 된다.
+
+### 8. `useFocusEffect` 없이는 화면이 자동으로 데이터를 불러오지 않음
+
+`home.tsx`/`schedule.tsx`는 한동안 `scheduleStore.fetchToday()`를 호출하는 코드가 전혀 없어서,
+DB에는 `routine_blocks`가 정상 생성돼도 화면에는 아무 것도 표시되지 않는 문제가 있었다
+(2026-07-03 실사용 중 발견, 수정 완료). 새 화면을 추가할 때는 `dashboard.tsx`처럼
+`useFocusEffect(useCallback(() => { fetchX(); }, [fetchX]))` 패턴을 반드시 연결할 것.
+
 ---
 
 ## 상태 관리 패턴
@@ -251,8 +270,9 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 |--------|--------|----------|
 | `authStore` | Supabase Auth (SecureStore) | `initialize()` — 세션 복원, `onAuthStateChange` 구독, `userName` (`profiles.name`) 조회 |
 | `scheduleStore` | Supabase DB | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` — 낙관적 업데이트 |
-| `onboardingStore` | Supabase DB | goal 저장 + `supabase.functions.invoke('generate-schedule')` → `routine_blocks` 저장 |
+| `onboardingStore` | Supabase DB | goal 저장(+ wake_time/sleep_time) + `supabase.functions.invoke('generate-schedule')` → `routine_blocks` 저장 |
 | `dashboardStore` | Supabase DB | `fetchDashboard` — 이번 주 완료율·스트릭·D-N 추정·인사이트 텍스트 |
+| `feedbackStore` | Supabase DB | `loadToday`(오늘/어제 완료율 계산 + 기존 회고 조회) / `submitMood`(`generate-feedback` 호출 → 내일 스케줄 저장 + `feedbacks` insert) |
 | `notificationStore` | AsyncStorage | 알림 토글 7종 + 방해금지 시간 |
 
 ### 화면-스토어 연결
@@ -262,11 +282,12 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 | `_layout.tsx` | `authStore.initialize()` |
 | `(auth)/login.tsx` | `supabase` 직접 (signInWithOAuth / setSession) |
 | `(onboarding)/loading.tsx` | `onboardingStore.saveGoalAndGenerateSchedule` |
-| `(tabs)/home.tsx` | `scheduleStore.fetchToday`, `authStore.userName` |
-| `(tabs)/schedule.tsx` | `scheduleStore.fetchToday`, `reorderBlocks` |
+| `(tabs)/home.tsx` | `scheduleStore.fetchToday`(useFocusEffect), `authStore.userName` |
+| `(tabs)/schedule.tsx` | `scheduleStore.fetchToday`(useFocusEffect), `reorderBlocks` |
 | `(tabs)/settings.tsx` | `notificationStore` 전체 |
 | `(tabs)/dashboard.tsx` | `dashboardStore.fetchDashboard` (useFocusEffect) |
 | `(modals)/checkin.tsx` | `scheduleStore.completeCheckin`, `skipBlock` |
+| `(modals)/reflection.tsx` | `feedbackStore.loadToday`, `submitMood` |
 
 ---
 
@@ -283,11 +304,54 @@ Xcode에서 직접 빌드 후 `xcrun simctl`로 설치하는 방법 사용 (READ
 
 - [ ] Apple OAuth (Apple Developer Program 필요)
 - [ ] 카카오 로그인 네이티브 빌드 Redirect URI 등록
-- [ ] `POST /feedback` — 저녁 회고 AI 피드백 (Supabase Edge Function으로 구현 예정)
+- [x] `POST /feedback` — 저녁 회고 AI 피드백 (`generate-feedback` Edge Function으로 구현 완료, 2026-07-03)
 - [ ] FCM 푸시 알림 연동
 - [x] SCR-06 대시보드 실제 통계 연동 (2026-06-30 완료)
 - [ ] Google 로그인 네이티브 빌드 Redirect URI 등록
+- [ ] 저녁 회고 주 3회 트리거를 서버 측에서 강제하는 로직 (현재는 홈 화면 월/수/금 배지 UI만, 실제 작성 제한 없음)
 
 ---
 
-*마지막 업데이트: 2026-06-30 | Expo SDK 56 | 프로젝트 루트: `/Users/ickhwanyu/Desktop/design-portfolio/NewHuman/mobile`*
+## 저녁 회고 AI 피드백 구현 현황 (2026-07-03)
+
+`(modals)/reflection.tsx`를 Figma SCR-05 디자인(완료율 카드 + AI 코치 피드백 카드 + 내일 루틴 미리보기 카드 +
+무드 선택)에 맞게 전면 재작성하고, 백엔드까지 완전히 연동 완료.
+
+- **DB**: `goals.wake_time`/`sleep_time`, `feedbacks.mood` 컬럼 추가 (마이그레이션 적용 완료)
+- **Edge Function**: `generate-feedback` 신규 배포. 오늘 완료/건너뜀 루틴 + 완료율 + 무드 + 목표를 받아 Claude
+  1회 호출로 AI 코치 피드백(`ai_summary`)과 내일 루틴(`next_blocks`)을 동시 생성. `score`는 AI가 아니라
+  클라이언트가 계산한 완료율을 그대로 사용(환각 방지, 응답도 `{ai_summary, next_blocks}`만 명시적으로 반환).
+- **스토어**: `feedbackStore.loadToday`가 오늘/어제 완료율 계산 + 오늘자 `feedbacks` 존재 여부 확인(있으면
+  읽기 전용으로 즉시 표시, 재생성 안 함). `submitMood`가 Edge Function 호출 → 내일 `daily_schedules`/
+  `routine_blocks` 저장 → `feedbacks` insert까지 한 번에 처리.
+- **UX**: 무드 선택이 AI 호출을 트리거하는 One-Tap 흐름. 무드 선택 후에는 재탭으로 중복 제출되지 않도록
+  버튼 비활성화 처리.
+- **홈 화면**: "오늘 하루 회고 작성하기" 행에 월/수/금에만 강조 배지 표시(수동 진입은 요일 무관 항상 가능).
+- 스펙: `docs/superpowers/specs/2026-07-03-evening-reflection-ai-feedback-design.md`
+- 플랜: `docs/superpowers/plans/2026-07-03-evening-reflection-ai-feedback.md`
+
+---
+
+## 실사용 테스트 중 발견·수정한 버그 (2026-07-03)
+
+저녁 회고 기능 배포 후 실제 계정(Google 로그인)으로 온보딩부터 테스트하며 발견한 문제 3건, 전부 수정 완료
+후 `main`에 push됨(`c1512d2..b164817`).
+
+1. **온보딩 목표 저장 FK 오류** (`23503`, `goals_user_id_fkey`) — 원인은 위 "알려진 함정 #7"과 동일.
+   기존 두 테스트 계정(구글/카카오)의 `profiles` 행을 SQL로 백필해 해결(데이터 수정, 코드 변경 없음).
+2. **홈/스케줄 화면에 오늘 스케줄이 안 보임** — 원인은 위 "알려진 함정 #8"과 동일.
+   `home.tsx`/`schedule.tsx`에 `useFocusEffect` 연결.
+3. **체크인 모달에서 긴 루틴명이 잘림 + 배경 탭으로 안 닫힘** — `checkin.tsx`의 제목 텍스트 wrapper에
+   `flex: 1` 누락(→ `RoutineItem`/`Card`와 동일 패턴 적용), `overlay`/`sheet`를 `Pressable`로 바꿔
+   배경 탭 시 닫히도록 추가.
+
+## 다음 확인 필요
+
+- [ ] 저녁 회고(reflection) 화면을 실제 계정으로 끝까지 눌러보기 (무드 선택 → AI 피드백/내일 스케줄 카드
+      표시까지) — DB 레벨 시뮬레이션과 curl 테스트만 통과한 상태, 실제 클릭 테스트는 아직
+- [ ] `schedule.tsx`/`home.tsx`의 "+ 직접 루틴 추가하기" — 버튼은 있지만 `onPress`가 빈 함수라 미구현
+      상태 (SCR-10c/10d 화면 정의에는 있는 CTA이나 폼/모달/DB insert 로직 없음)
+
+---
+
+*마지막 업데이트: 2026-07-03 | Expo SDK 56 | 프로젝트 루트: `/Users/ickhwanyu/Desktop/design-portfolio/NewHuman/mobile`*

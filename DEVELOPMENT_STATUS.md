@@ -1,6 +1,6 @@
 # MyCoach 모바일 앱 개발 현황
 
-> 마지막 업데이트: 2026-06-30
+> 마지막 업데이트: 2026-07-03
 
 ## 프로젝트 구조
 
@@ -40,7 +40,7 @@ CLAUDE.md 디자인 토큰 전체 반영:
 | SCR-06 주간 대시보드 | `(tabs)/dashboard.tsx` | KPI 카드 3종, 요일별 완료율 차트, **스트릭 캘린더**, **목표 달성 예측** 카드, 롤모델 인사이트 |
 | SCR-07 알림 설정 | `(tabs)/settings.tsx` | **전체 알림 마스터 토글**, **방해 금지 시간**(취침/기상), Android 배너 카드(조건부), 개별 알림 토글 4종 |
 | SCR-04 체크인 모달 | `(modals)/checkin.tsx` | One-Tap 완료/오늘만 건너뛰기, 스트릭 경고, **실제 소요 시간 스테퍼(±5분)**, **메모 입력** |
-| SCR-05 저녁 회고 모달 | `(modals)/reflection.tsx` | 이모지+레이블 기분 평가(선택 상태 배경), 메모 입력, "기록 완료" |
+| SCR-05 저녁 회고 모달 | `(modals)/reflection.tsx` | 완료율 카드 + **AI 코치 피드백 카드** + **내일 루틴 미리보기 카드** + 이모지 기분 평가(선택 시 AI 생성 트리거), 기존 기록 있으면 읽기 전용 표시 |
 
 ## UX 감사 반영 항목 (CLAUDE.md 기준)
 
@@ -292,10 +292,76 @@ SCR-06 대시보드 화면의 하드코딩 상수 5종을 Supabase 실데이터�
 
 ---
 
+## 저녁 회고 AI 피드백 연동 (2026-07-03)
+
+### 개요
+
+`(modals)/reflection.tsx`를 이모지+메모 뿐이던 목업에서 Figma SCR-05 디자인(완료율 카드 + AI 코치 피드백
+카드 + 내일 루틴 미리보기 카드)대로 전면 재작성하고, `POST /feedback` 백엔드까지 완전히 구현.
+
+### 신규 파일
+
+| 파일 | 내용 |
+|------|------|
+| `supabase/functions/generate-feedback/index.ts` | Claude API 호출 Edge Function — 오늘 완료/건너뜀 루틴 + 완료율 + 무드 + 목표를 받아 `ai_summary`(AI 코치 피드백)와 `next_blocks`(내일 루틴 5~7개)를 1회 호출로 동시 생성. `generate-schedule`과 동일 컨벤션(CORS, SyntaxError 재시도 1회). 응답은 `{ai_summary, next_blocks}`만 명시적으로 재구성해 반환(AI가 `score` 등 다른 필드를 끼워 넣어도 유출되지 않도록 방어) |
+| `src/stores/feedbackStore.ts` | `loadToday`(오늘/어제 완료율 계산, 오늘자 `feedbacks` 존재 시 읽기 전용으로 즉시 표시) / `submitMood`(Edge Function 호출 → 내일 `daily_schedules`/`routine_blocks` 저장 → `feedbacks` insert, 각 insert 에러 체크) |
+| `supabase/migrations/20260703000000_feedback_mood_wake_sleep.sql` | `feedbacks.mood`(check `bad|meh|okay|good|great`), `goals.wake_time`/`sleep_time`(default `07:00`/`23:00`) 컬럼 추가 |
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `src/app/(modals)/reflection.tsx` | 전면 재작성 — 자유입력 노트 제거(Figma에 없음), 무드 라벨을 Figma 문구로 교체(힘들어요/아쉬워요/보통이요/좋아요/완벽해요), 무드 선택이 AI 생성을 트리거하는 One-Tap 흐름, 결과 생성 후 무드 재탭으로 인한 중복 제출 방지 |
+| `src/stores/onboardingStore.ts` | goals insert에 `wake_time`/`sleep_time` 추가 — 기존엔 온보딩 입력값이 DB에 저장되지 않고 있었음 |
+| `src/app/(tabs)/home.tsx` | "오늘 하루 회고 작성하기" 행에 월/수/금 강조 배지 추가(`isReflectionDay()`), 수동 진입은 요일 무관 항상 가능 |
+
+### 동작 확인 (2026-07-03)
+
+- curl 테스트 성공 — 완료율 86%, 무드 "좋아요" 기준 `ai_summary` + 내일 루틴 7개 생성 확인
+- DB 레벨 E2E 검증 — 실제 계정으로 `submitMood`의 전체 쓰기 시퀀스(Edge Function 호출 → `feedbacks` insert →
+  내일 `daily_schedules`/`routine_blocks` insert)를 수동 시뮬레이션, `score`가 AI가 아닌 완료율 계산값과
+  일치함을 확인, `unique(user_id, date)` 제약으로 재작성 방지(idempotency) 확인 후 테스트 데이터 원복 완료
+
+### 리뷰 중 발견·수정된 이슈
+
+- `generate-feedback` 응답이 raw JSON을 그대로 반환해 AI가 `score` 등 stray 필드를 끼워 넣어도 유출될 수 있던 문제 → 응답 필드 명시적 재구성으로 수정
+- 무드 선택 후 결과가 나온 뒤에도 무드 버튼이 계속 활성 상태라 재탭 시 AI 재호출 + 내일 스케줄 재작성이 발생하던 문제 → 결과 존재 시 무드 버튼 비활성화로 수정
+- `submitMood`의 `routine_blocks`/`feedbacks` insert 에러를 체크하지 않아 실패해도 성공한 것처럼 보이던 문제 → 에러 체크 후 throw로 수정
+
+### 참고 문서
+
+- 스펙: `docs/superpowers/specs/2026-07-03-evening-reflection-ai-feedback-design.md` (NewHuman 루트)
+- 플랜: `docs/superpowers/plans/2026-07-03-evening-reflection-ai-feedback.md` (NewHuman 루트)
+
+---
+
+## 실사용 테스트 중 발견·수정한 버그 (2026-07-03)
+
+저녁 회고 기능을 `main`에 병합한 뒤, 실제 Google 계정으로 온보딩부터 직접 테스트하며 발견한 문제 3건.
+전부 수정 후 `main`에 push 완료(`c1512d2..b164817`).
+
+| # | 증상 | 원인 | 조치 |
+|---|------|------|------|
+| 1 | 온보딩 스텝3 "스케줄 생성하기"에서 `insert or update on table "goals" violates foreign key constraint "goals_user_id_fkey"` (23503) | `handle_new_user` 트리거가 `AFTER INSERT ON auth.users`로만 동작해 트리거 이전부터 있던 두 테스트 계정(구글/카카오)엔 `profiles` 행이 없었음 | 두 계정에 대해 트리거와 동일한 로직으로 `profiles` 행 SQL 백필 (데이터 수정, 코드 변경 없음) |
+| 2 | `routine_blocks`는 DB에 정상 생성됐는데 홈 화면에는 아무 것도 안 보임 | `home.tsx`/`schedule.tsx`에 `scheduleStore.fetchToday()`를 호출하는 코드가 전혀 없었음 (재시도 버튼에서만 참조) | `dashboard.tsx`와 동일한 `useFocusEffect(useCallback(() => fetchToday(), [fetchToday]))` 패턴 연결 |
+| 3 | 체크인 모달에서 긴 루틴명이 줄바꿈 없이 잘림 + 배경(빈 화면) 탭해도 안 닫힘 | 제목 텍스트를 감싸는 `View`에 `flex: 1` 누락(`RoutineItem`/`Card`엔 있었음); `overlay`/`sheet`가 단순 `View`라 탭 이벤트 없음 | `titleGroup` 스타일에 `flex: 1` 추가; `overlay`/`sheet`를 `Pressable`로 변경(시트 안쪽은 no-op onPress로 전파 차단) |
+
+### 검증 방법
+
+Playwright로 직접 로그인은 불가(OAuth 벽)했기 때문에, 사용자가 실제 세션에서 조작한 결과를
+Supabase에서 직접 조회해 교차 검증: `profiles` 1건 생성 확인, `goals`(활성 1건, wake_time/sleep_time
+실제 입력값 저장), `daily_schedules`(오늘 1건, 중복 없음) + `routine_blocks` 7건, `routine_blocks` 중 2건이
+실제로 `done` 상태로 체크인된 것까지 확인.
+
+---
+
 ## 다음 단계
 
 - [ ] Apple OAuth 설정 (Supabase Dashboard) — 보류, Apple Developer Program 가입 필요
 - [ ] 카카오 로그인 — 네이티브 빌드(iOS/Android) 테스트 시 Redirect URI 추가 등록
-- [ ] **`POST /feedback`** — 저녁 회고 AI 피드백 (Supabase Edge Function으로 구현 예정)
+- [x] **`POST /feedback`** — 저녁 회고 AI 피드백 (`generate-feedback` Edge Function으로 구현 완료, 2026-07-03)
 - [ ] iOS/Android 스탠드얼론 빌드용 Google Client ID 추가 (`.env`)
 - [ ] FCM 푸시 알림 연동
+- [ ] 저녁 회고 주 3회 트리거를 서버 측에서 강제하는 로직 (현재는 홈 화면 월/수/금 배지 UI만, 실제 작성 제한 없음)
+- [ ] 저녁 회고(reflection) 화면 실제 클릭 테스트 — DB 시뮬레이션/curl만 통과, 무드 선택→AI 카드 표시까지 실제 화면에서는 아직 미확인
+- [ ] `schedule.tsx`/`home.tsx`의 "+ 직접 루틴 추가하기" — 버튼 존재하나 `onPress`가 빈 함수, 폼/모달/DB insert 로직 미구현

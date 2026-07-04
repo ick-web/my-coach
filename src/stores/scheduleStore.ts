@@ -164,7 +164,24 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     }
 
     const durationLabel = `${durationMinutes}분`;
-    const sortOrder = get().blocks.length;
+
+    // 시간순으로 삽입될 위치 계산 (blocks는 sort_order 순 = 시간순으로 정렬돼 있음)
+    const existingBlocks = get().blocks;
+    const insertIndex = existingBlocks.findIndex((b) => b.time > time);
+    const sortOrder = insertIndex === -1 ? existingBlocks.length : insertIndex;
+
+    // 삽입 위치 이후 블록들의 sort_order를 한 칸씩 밀어서 자리 확보
+    const blocksToShift = insertIndex === -1 ? [] : existingBlocks.slice(insertIndex);
+    if (blocksToShift.length > 0) {
+      await Promise.all(
+        blocksToShift.map((b, i) =>
+          supabase
+            .from('routine_blocks')
+            .update({ sort_order: sortOrder + 1 + i })
+            .eq('id', b.id)
+        )
+      );
+    }
 
     const { data: row, error: insertErr } = await supabase
       .from('routine_blocks')
@@ -183,20 +200,19 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
 
     if (insertErr || !row) return;
 
-    set((s) => ({
-      scheduleId,
-      loadStatus: 'idle',
-      blocks: [
-        ...s.blocks,
-        {
-          id: row.id,
-          time: row.time,
-          task: row.task,
-          duration: row.duration_label,
-          durationMinutes: row.duration_minutes,
-          status: row.status as RoutineStatus,
-        },
-      ],
-    }));
+    const newBlock: RoutineBlock = {
+      id: row.id,
+      time: row.time,
+      task: row.task,
+      duration: row.duration_label,
+      durationMinutes: row.duration_minutes,
+      status: row.status as RoutineStatus,
+    };
+
+    set((s) => {
+      const blocks = [...s.blocks];
+      blocks.splice(sortOrder, 0, newBlock);
+      return { scheduleId, loadStatus: 'idle', blocks };
+    });
   },
 }));

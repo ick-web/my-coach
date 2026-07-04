@@ -19,6 +19,8 @@ type ScheduleState = {
   skipBlock: (id: string) => Promise<void>;
   // 순서 변경 (로컬 즉시 반영 후 DB 배치 업데이트)
   reorderBlocks: (fromIndex: number, toIndex: number) => Promise<void>;
+  // 루틴 직접 추가
+  addBlock: (time: string, task: string, durationMinutes: number) => Promise<void>;
 };
 
 export const useScheduleStore = create<ScheduleState>()((set, get) => ({
@@ -141,5 +143,60 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       supabase.from('routine_blocks').update({ sort_order: i }).eq('id', b.id)
     );
     await Promise.all(updates);
+  },
+
+  addBlock: async (time, task, durationMinutes) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    let scheduleId = get().scheduleId;
+    const date = get().date;
+
+    if (!scheduleId) {
+      const { data: newSchedule, error: createErr } = await supabase
+        .from('daily_schedules')
+        .insert({ user_id: user.id, date })
+        .select('id')
+        .single();
+
+      if (createErr || !newSchedule) return;
+      scheduleId = newSchedule.id;
+    }
+
+    const durationLabel = `${durationMinutes}분`;
+    const sortOrder = get().blocks.length;
+
+    const { data: row, error: insertErr } = await supabase
+      .from('routine_blocks')
+      .insert({
+        schedule_id: scheduleId,
+        user_id: user.id,
+        time,
+        task,
+        duration_label: durationLabel,
+        duration_minutes: durationMinutes,
+        status: 'todo',
+        sort_order: sortOrder,
+      })
+      .select()
+      .single();
+
+    if (insertErr || !row) return;
+
+    set((s) => ({
+      scheduleId,
+      loadStatus: 'idle',
+      blocks: [
+        ...s.blocks,
+        {
+          id: row.id,
+          time: row.time,
+          task: row.task,
+          duration: row.duration_label,
+          durationMinutes: row.duration_minutes,
+          status: row.status as RoutineStatus,
+        },
+      ],
+    }));
   },
 }));

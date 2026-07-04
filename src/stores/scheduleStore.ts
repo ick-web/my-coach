@@ -21,6 +21,8 @@ type ScheduleState = {
   reorderBlocks: (fromIndex: number, toIndex: number) => Promise<void>;
   // 루틴 직접 추가
   addBlock: (time: string, task: string, durationMinutes: number) => Promise<void>;
+  // 루틴 삭제
+  deleteBlock: (id: string) => Promise<void>;
 };
 
 export const useScheduleStore = create<ScheduleState>()((set, get) => ({
@@ -214,5 +216,15 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       blocks.splice(sortOrder, 0, newBlock);
       return { scheduleId, loadStatus: 'idle', blocks };
     });
+  },
+
+  deleteBlock: async (id) => {
+    // 낙관적 업데이트
+    set((s) => {
+      const blocks = s.blocks.filter((b) => b.id !== id);
+      return { blocks, loadStatus: blocks.length === 0 ? 'empty' : s.loadStatus };
+    });
+
+    await supabase.from('routine_blocks').delete().eq('id', id);
   },
 }));

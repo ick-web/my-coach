@@ -103,6 +103,24 @@ export function CalendarIcon({ size = 64 }: { size?: number }) {
   );
 }
 
+/** 루틴 삭제 휴지통 */
+export function TrashIcon({ size = 20, color = Colors.subtext }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M4 7h16" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <Path d="M9 7V4.5h6V7" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d="M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M10 11v6M14 11v6" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** 목표 달성 예측 등 보조 설명용 정보(i) 아이콘 */
 export function InfoIcon({ size = 16, color = Colors.subtext }: IconProps) {
   return (

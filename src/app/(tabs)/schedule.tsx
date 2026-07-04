@@ -1,8 +1,9 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TrashIcon } from '@/components/icons/MiscIcons';
 import { RoutineStatusIcon } from '@/components/icons/RoutineStatusIcons';
 import { Button } from '@/components/ui/Button';
 import { AiBannerCard } from '@/components/ui/Card';
@@ -20,7 +21,7 @@ function DragHandle() {
 }
 
 export default function ScheduleScreen() {
-  const { blocks, date, fetchToday } = useScheduleStore();
+  const { blocks, date, fetchToday, deleteBlock } = useScheduleStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -57,6 +58,12 @@ export default function ScheduleScreen() {
                     {block.time} · {block.duration}
                   </Text>
                 </View>
+                <Pressable
+                  style={styles.deleteButton}
+                  hitSlop={8}
+                  onPress={() => deleteBlock(block.id)}>
+                  <TrashIcon size={18} color={Colors.subtext} />
+                </Pressable>
                 <DragHandle />
               </View>
             );
@@ -132,6 +139,12 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: '600',
     color: Colors.text,
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dragHandle: {
     width: 18,

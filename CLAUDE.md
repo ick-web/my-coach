@@ -349,8 +349,8 @@ DB에는 `routine_blocks`가 정상 생성돼도 화면에는 아무 것도 표�
 
 - [ ] 저녁 회고(reflection) 화면을 실제 계정으로 끝까지 눌러보기 (무드 선택 → AI 피드백/내일 스케줄 카드
       표시까지) — DB 레벨 시뮬레이션과 curl 테스트만 통과한 상태, 실제 클릭 테스트는 아직
-- [ ] `schedule.tsx`/`home.tsx`의 "+ 직접 루틴 추가하기" — 버튼은 있지만 `onPress`가 빈 함수라 미구현
-      상태 (SCR-10c/10d 화면 정의에는 있는 CTA이나 폼/모달/DB insert 로직 없음)
+- [x] `schedule.tsx`/`home.tsx`의 "+ 직접 루틴 추가하기" — `(modals)/add-routine.tsx` 바텀시트 +
+      `scheduleStore.addBlock`으로 구현 완료 (2026-07-04)
 
 ---
 

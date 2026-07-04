@@ -19,9 +19,9 @@ export default function AddRoutineModal() {
 
   const close = () => router.back();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const time = `${String(hour).padStart(2, '0')}:${String(MINUTE_STEPS[minuteIndex]).padStart(2, '0')}`;
-    addBlock(time, task.trim(), duration);
+    await addBlock(time, task.trim(), duration);
     close();
   };
 

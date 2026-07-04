@@ -269,7 +269,7 @@ DB에는 `routine_blocks`가 정상 생성돼도 화면에는 아무 것도 표�
 | 스토어 | 영속화 | 주요 역할 |
 |--------|--------|----------|
 | `authStore` | Supabase Auth (SecureStore) | `initialize()` — 세션 복원, `onAuthStateChange` 구독, `userName` (`profiles.name`) 조회 |
-| `scheduleStore` | Supabase DB | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` — 낙관적 업데이트 |
+| `scheduleStore` | Supabase DB | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` / `addBlock` — 낙관적 업데이트 |
 | `onboardingStore` | Supabase DB | goal 저장(+ wake_time/sleep_time) + `supabase.functions.invoke('generate-schedule')` → `routine_blocks` 저장 |
 | `dashboardStore` | Supabase DB | `fetchDashboard` — 이번 주 완료율·스트릭·D-N 추정·인사이트 텍스트 |
 | `feedbackStore` | Supabase DB | `loadToday`(오늘/어제 완료율 계산 + 기존 회고 조회) / `submitMood`(`generate-feedback` 호출 → 내일 스케줄 저장 + `feedbacks` insert) |

@@ -269,7 +269,7 @@ DB에는 `routine_blocks`가 정상 생성돼도 화면에는 아무 것도 표�
 | 스토어 | 영속화 | 주요 역할 |
 |--------|--------|----------|
 | `authStore` | Supabase Auth (SecureStore) | `initialize()` — 세션 복원, `onAuthStateChange` 구독, `userName` (`profiles.name`) 조회 |
-| `scheduleStore` | Supabase DB | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` / `addBlock` — 낙관적 업데이트 |
+| `scheduleStore` | Supabase DB | `fetchToday` / `completeCheckin` / `skipBlock` / `reorderBlocks` / `addBlock` / `deleteBlock` — 낙관적 업데이트 |
 | `onboardingStore` | Supabase DB | goal 저장(+ wake_time/sleep_time) + `supabase.functions.invoke('generate-schedule')` → `routine_blocks` 저장 |
 | `dashboardStore` | Supabase DB | `fetchDashboard` — 이번 주 완료율·스트릭·D-N 추정·인사이트 텍스트 |
 | `feedbackStore` | Supabase DB | `loadToday`(오늘/어제 완료율 계산 + 기존 회고 조회) / `submitMood`(`generate-feedback` 호출 → 내일 스케줄 저장 + `feedbacks` insert) |
@@ -283,7 +283,7 @@ DB에는 `routine_blocks`가 정상 생성돼도 화면에는 아무 것도 표�
 | `(auth)/login.tsx` | `supabase` 직접 (signInWithOAuth / setSession) |
 | `(onboarding)/loading.tsx` | `onboardingStore.saveGoalAndGenerateSchedule` |
 | `(tabs)/home.tsx` | `scheduleStore.fetchToday`(useFocusEffect), `authStore.userName` |
-| `(tabs)/schedule.tsx` | `scheduleStore.fetchToday`(useFocusEffect), `reorderBlocks` |
+| `(tabs)/schedule.tsx` | `scheduleStore.fetchToday`(useFocusEffect), `reorderBlocks`, `deleteBlock` |
 | `(tabs)/settings.tsx` | `notificationStore` 전체 |
 | `(tabs)/dashboard.tsx` | `dashboardStore.fetchDashboard` (useFocusEffect) |
 | `(modals)/checkin.tsx` | `scheduleStore.completeCheckin`, `skipBlock` |
@@ -345,13 +345,40 @@ DB에는 `routine_blocks`가 정상 생성돼도 화면에는 아무 것도 표�
    `flex: 1` 누락(→ `RoutineItem`/`Card`와 동일 패턴 적용), `overlay`/`sheet`를 `Pressable`로 바꿔
    배경 탭 시 닫히도록 추가.
 
+## 직접 루틴 추가/삭제 기능 구현 현황 (2026-07-04)
+
+`schedule.tsx`/`home.tsx`의 "+ 직접 루틴 추가하기" CTA(기존엔 `onPress`가 빈 함수)를 실제로 동작하도록 구현하고,
+스케줄 수정 화면에 루틴 삭제 기능을 추가.
+
+- **DB/스토어**: `scheduleStore`에 `addBlock(time, task, durationMinutes)` / `deleteBlock(id)` 액션 추가.
+  - `addBlock`: 오늘 `daily_schedules`가 없으면(빈 상태) 먼저 생성 → `routine_blocks` insert(`status: 'todo'`).
+    기존 루틴들과 `time`(`"HH:MM"` 문자열 비교)을 비교해 **시간순으로 올바른 위치에 삽입**하고, 삽입 위치
+    이후 루틴들의 `sort_order`를 한 칸씩 밀어 순서를 유지한다(맨 뒤에만 붙던 초기 구현을 2026-07-04 중
+    사용자 피드백으로 수정).
+  - `deleteBlock`: 낙관적 업데이트로 목록에서 즉시 제거 후 `routine_blocks` delete. 마지막 루틴 삭제 시
+    `loadStatus`를 `'empty'`로 전환해 홈 화면이 빈 상태 UI로 자연스럽게 전환되도록 함.
+- **UI**: 새 바텀시트 모달 `(modals)/add-routine.tsx`(할 일 이름 + 시/분 스테퍼 + 소요시간 스테퍼,
+  `checkin.tsx`와 동일한 오버레이+시트 패턴) 신규 추가. `_layout.tsx` Stack에 `presentation: 'modal'`로 등록.
+  `schedule.tsx`의 각 루틴 행에 휴지통 아이콘(`MiscIcons.tsx`의 `TrashIcon` 신규 추가) 배치, 탭 시 확인
+  단계 없이 바로 삭제(One-Tap 원칙 유지).
+- **버그 수정**: 최종 리뷰에서 발견된 `addBlock`(비동기 fire-and-forget) × `useFocusEffect`(포커스 시
+  `fetchToday` 재조회) 레이스 컨디션 — 모달의 `handleSubmit`이 `addBlock`을 기다리지 않고 바로 `router.back()`을
+  호출해 드물게 "추가했는데 화면에 안 보임" 현상이 날 수 있었음. `handleSubmit`을 `async`로 바꾸고
+  `await addBlock(...)` 후 `close()`하도록 수정.
+- **테스트**: 실제 계정으로 추가/삭제 모두 수동 테스트 완료(2026-07-04). 시간순 삽입도 확인됨.
+- 스펙: `docs/superpowers/specs/2026-07-04-manual-routine-add-design.md`
+- 플랜: `docs/superpowers/plans/2026-07-04-manual-routine-add.md`
+
+---
+
 ## 다음 확인 필요
 
 - [ ] 저녁 회고(reflection) 화면을 실제 계정으로 끝까지 눌러보기 (무드 선택 → AI 피드백/내일 스케줄 카드
       표시까지) — DB 레벨 시뮬레이션과 curl 테스트만 통과한 상태, 실제 클릭 테스트는 아직
 - [x] `schedule.tsx`/`home.tsx`의 "+ 직접 루틴 추가하기" — `(modals)/add-routine.tsx` 바텀시트 +
-      `scheduleStore.addBlock`으로 구현 완료 (2026-07-04)
+      `scheduleStore.addBlock`으로 구현 완료, 실사용 테스트 완료 (2026-07-04)
+- [x] 스케줄 수정 화면 루틴 삭제 기능 — `scheduleStore.deleteBlock` + 휴지통 아이콘, 실사용 테스트 완료 (2026-07-04)
 
 ---
 
-*마지막 업데이트: 2026-07-03 | Expo SDK 56 | 프로젝트 루트: `/Users/ickhwanyu/Desktop/design-portfolio/NewHuman/mobile`*
+*마지막 업데이트: 2026-07-04 | Expo SDK 56 | 프로젝트 루트: `/Users/ickhwanyu/Desktop/design-portfolio/NewHuman/mobile`*

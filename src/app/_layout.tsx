@@ -45,6 +45,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(modals)/checkin" options={{ presentation: 'modal' }} />
         <Stack.Screen name="(modals)/reflection" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="(modals)/add-routine" options={{ presentation: 'modal' }} />
       </Stack>
     </SafeAreaProvider>
   );

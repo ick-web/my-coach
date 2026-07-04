@@ -99,10 +99,10 @@ function EmptyState() {
       </Text>
       <View style={styles.emptyActions}>
         <Button label="AI로 루틴 생성하기" fullWidth onPress={() => {}} />
-        <View style={styles.addRoutineRow}>
+        <Pressable style={styles.addRoutineRow} onPress={() => router.push('/add-routine')}>
           <PlusIcon />
           <Text style={styles.addRoutineText}>직접 루틴 추가하기</Text>
-        </View>
+        </Pressable>
       </View>
     </View>
   );

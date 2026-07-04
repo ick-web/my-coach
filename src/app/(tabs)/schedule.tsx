@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,7 +63,12 @@ export default function ScheduleScreen() {
           })}
         </View>
 
-        <Button label="+ 직접 루틴 추가하기" variant="ghost" fullWidth onPress={() => {}} />
+        <Button
+          label="+ 직접 루틴 추가하기"
+          variant="ghost"
+          fullWidth
+          onPress={() => router.push('/add-routine')}
+        />
       </ScrollView>
     </SafeAreaView>
   );
